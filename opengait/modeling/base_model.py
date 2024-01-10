@@ -26,7 +26,8 @@ from . import backbones
 from .loss_aggregator import LossAggregator
 from data.transform import get_transform
 from data.collate_fn import CollateFn
-from data.dataset import DataSet
+from data.dataset_occ import OcclusionDataSet
+# from data.dataset import DataSet
 import data.sampler as Samplers
 from utils import Odict, mkdir, ddp_all_gather
 from utils import get_valid_args, is_list, is_dict, np2var, ts2np, list2var, get_attr_from
@@ -204,8 +205,8 @@ class BaseModel(MetaModel, nn.Module):
 
     def get_loader(self, data_cfg, train=True):
         sampler_cfg = self.cfgs['trainer_cfg']['sampler'] if train else self.cfgs['evaluator_cfg']['sampler']
-        dataset = DataSet(data_cfg, train)
-
+        # dataset = DataSet(data_cfg, train)
+        dataset = OcclusionDataSet(data_cfg, train)
         Sampler = get_attr_from([Samplers], sampler_cfg['type'])
         vaild_args = get_valid_args(Sampler, sampler_cfg, free_keys=[
             'sample_type', 'type'])

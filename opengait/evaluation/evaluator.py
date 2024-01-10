@@ -2,7 +2,7 @@ import os
 from time import strftime, localtime
 import numpy as np
 from utils import get_msg_mgr, mkdir
-
+from skimage.metrics import structural_similarity as cal_ssim
 from .metric import mean_iou, cuda_dist, compute_ACC_mAP, evaluate_rank, evaluate_many
 from .re_rank import re_ranking
 
@@ -415,3 +415,39 @@ def evaluate_CCPG(data, dataset, metric='euc'):
         msg_mgr.log_info('DN: {}'.format(de_diag(acc[2, :, :, i], True)))
         msg_mgr.log_info('BG: {}'.format(de_diag(acc[3, :, :, i], True)))
     return result_dict
+
+
+def MAE(pred, true):
+    return np.mean(np.abs(pred-true),axis=(0,1)).sum()
+
+def MSE(pred, true):
+    return np.mean((pred-true)**2,axis=(0,1)).sum()
+
+def PSNR(pred, true):
+    mse = np.mean((np.uint8(pred * 255)-np.uint8(true * 255))**2)
+    return 20 * np.log10(255) - 10 * np.log10(mse)
+
+def evaluate_image_rec(data, dataset, return_ssim_psnr=False, clip_range=[0, 1]):
+    msg_mgr = get_msg_mgr()
+    pred = data['pred']
+    true = data['gt']
+    mae = MAE(pred, true)
+    mse = MSE(pred, true)
+
+    if return_ssim_psnr:
+        pred = np.maximum(pred, clip_range[0])
+        pred = np.minimum(pred, clip_range[1])
+        ssim, psnr = 0, 0
+        for b in range(pred.shape[0]):
+            for f in range(pred.shape[1]):
+                ssim += cal_ssim(pred[b, f].swapaxes(0, 2), true[b, f].swapaxes(0, 2), multichannel=True)
+                psnr += PSNR(pred[b, f], true[b, f])
+        ssim = ssim / (pred.shape[0] * pred.shape[1])
+        psnr = psnr / (pred.shape[0] * pred.shape[1])
+        msg_mgr.log_info(f"scalar/test_accuracy/mse:{mse}   scalar/test_accuracy/mae:{mae}")
+        msg_mgr.log_info(f"scalar/test_accuracy/ssim:{ssim}   scalar/test_accuracy/psnr:{psnr}")
+        return {"scalar/test_accuracy/mse": mse, "scalar/test_accuracy/mae": mae,"scalar/test_accuracy/ssim": ssim,"scalar/test_accuracy/psnr": psnr}
+    else:
+        msg_mgr.log_info(f"scalar/test_accuracy/mse:{mse}   scalar/test_accuracy/mae:{mae}")
+        return {"scalar/test_accuracy/mse": mse, "scalar/test_accuracy/mae": mae}
+    
