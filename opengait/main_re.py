@@ -62,7 +62,7 @@ def run_model(cfgs, training):
 #     import os
 #     # os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 #     os.environ['MASTER_ADDR'] = 'localhost'
-#     os.environ['MASTER_PORT'] = '5678'
+#     os.environ['MASTER_PORT'] = '5679'
 #     dist.init_process_group(backend='nccl', init_method='env://', rank = 0, world_size = 1)
 #     cfgs = config_loader(opt.cfgs)
 #     if opt.iter != 0:
