@@ -23,7 +23,7 @@ from abc import ABCMeta
 from abc import abstractmethod
 
 from . import backbones
-from .loss_aggregator import LossAggregator
+from .loss_aggregator import LossAggregator,LossAggregator_Mul
 from data.transform import get_transform
 from data.collate_fn import CollateFn
 from data.dataset_occ import OcclusionDataSet
@@ -163,6 +163,7 @@ class BaseModel(MetaModel, nn.Module):
             "cuda", self.device))
 
         if training:
+            # self.loss_aggregator = LossAggregator_Mul(cfgs['loss_cfg'])
             self.loss_aggregator = LossAggregator(cfgs['loss_cfg'])
             self.optimizer = self.get_optimizer(self.cfgs['optimizer_cfg'])
             self.scheduler = self.get_scheduler(cfgs['scheduler_cfg'])
@@ -249,11 +250,13 @@ class BaseModel(MetaModel, nn.Module):
 
     def _load_ckpt(self, save_name):
         load_ckpt_strict = self.engine_cfg['restore_ckpt_strict']
-
         checkpoint = torch.load(save_name, map_location=torch.device(
             "cuda", self.device))
         model_state_dict = checkpoint['model']
-
+        # rec_model_param = torch.load('/home/sp/projects/git_update/OpenGait/output/CASIA-B/SimVP_Rec/Phase_Rec_WITH_DIS_MULTY/checkpoints/Phase_Rec_WITH_DIS_MULTY-25000.pt')
+        # rec_model_param['rec_model'] = rec_model_param['model']
+        # for k,v in rec_model_param['model'].items():
+        #     model_state_dict.update({'rec_model.'+k:v})
         if not load_ckpt_strict:
             self.msg_mgr.log_info("-------- Restored Params List --------")
             self.msg_mgr.log_info(sorted(set(model_state_dict.keys()).intersection(
@@ -415,7 +418,7 @@ class BaseModel(MetaModel, nn.Module):
                 continue
 
             visual_summary.update(loss_info)
-            visual_summary['scalar/learning_rate'] = model.optimizer.param_groups[0]['lr']
+            visual_summary['scalar/learning_rate'] = model.optimizer[0].param_groups[0]['lr']
 
             model.msg_mgr.train_step(loss_info, visual_summary)
             if model.iteration % model.engine_cfg['save_iter'] == 0:

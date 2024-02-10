@@ -21,6 +21,7 @@ class BinaryCrossEntropyLoss(BaseLoss):
                   (1 - labels) * torch.log(1. - logits + self.eps))
 
         n = loss.size(0)
+        # loss = loss.reshape(n,...)
         loss = loss.view(n, -1)
         mean_loss = loss.mean()
         hard_loss = loss.max()

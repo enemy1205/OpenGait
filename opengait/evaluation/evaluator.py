@@ -451,3 +451,30 @@ def evaluate_image_rec(data, dataset, return_ssim_psnr=False, clip_range=[0, 1])
         msg_mgr.log_info(f"scalar/test_accuracy/mse:{mse}   scalar/test_accuracy/mae:{mae}")
         return {"scalar/test_accuracy/mse": mse, "scalar/test_accuracy/mae": mae}
     
+def evaluate_gait_rec(data, dataset, metric='euc',return_ssim_psnr=False, clip_range=[0, 1], cross_view_gallery=False):
+    msg_mgr = get_msg_mgr()
+    pred = data['pred']
+    true = data['gt']
+    result_dict = {}
+    if 'embeddings' in data:
+        result_dict = evaluate_indoor_dataset(data,dataset,metric,cross_view_gallery)
+    mae = MAE(pred, true)
+    mse = MSE(pred, true)
+
+    if return_ssim_psnr:
+        pred = np.maximum(pred, clip_range[0])
+        pred = np.minimum(pred, clip_range[1])
+        ssim, psnr = 0, 0
+        for b in range(pred.shape[0]):
+            for f in range(pred.shape[1]):
+                ssim += cal_ssim(pred[b, f].swapaxes(0, 2), true[b, f].swapaxes(0, 2), multichannel=True)
+                psnr += PSNR(pred[b, f], true[b, f])
+        ssim = ssim / (pred.shape[0] * pred.shape[1])
+        psnr = psnr / (pred.shape[0] * pred.shape[1])
+        msg_mgr.log_info(f"scalar/test_accuracy/mse:{mse}   scalar/test_accuracy/mae:{mae}")
+        msg_mgr.log_info(f"scalar/test_accuracy/ssim:{ssim}   scalar/test_accuracy/psnr:{psnr}")
+        result_dict.update({"scalar/test_accuracy/mse": mse, "scalar/test_accuracy/mae": mae,"scalar/test_accuracy/ssim": ssim,"scalar/test_accuracy/psnr": psnr})
+    else:
+        msg_mgr.log_info(f"scalar/test_accuracy/mse:{mse}   scalar/test_accuracy/mae:{mae}")
+        result_dict.update({"scalar/test_accuracy/mse": mse, "scalar/test_accuracy/mae": mae})
+    return result_dict

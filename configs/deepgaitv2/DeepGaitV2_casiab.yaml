@@ -1,8 +1,8 @@
 data_cfg:
   dataset_name: CASIA-B
-  dataset_root: your_path
+  dataset_root: /home/sp/datasets/CASIA_B/silhouettes_seg_cut_pkl
   dataset_partition: ./datasets/CASIA-B/CASIA-B.json
-  num_workers: 1
+  num_workers: 12
   remove_no_gallery: false # Remove probe if no gallery for it
   test_dataset_name: CASIA-B
 
@@ -11,13 +11,20 @@ evaluator_cfg:
   restore_ckpt_strict: true
   restore_hint: 60000
   save_name: DeepGaitV2
+  # sampler:
+  #   batch_shuffle: false
+  #   batch_size: 16
+  #   sample_type: all_ordered # all indicates whole sequence used to test, while ordered means input sequence by its natural order; Other options:   fixed_unordered
+  #   frames_all_limit: 720 # limit the number of sampled frames to prevent out of memory
   sampler:
-    batch_shuffle: false
-    batch_size: 4
-    sample_type: all_ordered # all indicates whole sequence used to test, while ordered means input sequence by its natural order; Other options:   fixed_unordered
-    frames_all_limit: 720 # limit the number of sampled frames to prevent out of memory
+    batch_size: 32
+    frames_num_fixed: 30 # fixed frames number for training
+    sample_type: fixed_ordered
+    frames_skip_num: 0
+    type: InferenceSampler
   metric: euc # cos
   transform:
+    - type: BaseSilCuttingTransform
     - type: BaseSilCuttingTransform
 
 loss_cfg:
@@ -48,6 +55,27 @@ model_cfg:
       - 512
   SeparateBNNecks:
     class_num: 74
+  SimVP:
+    shape_in: 
+      - 30
+      - 1
+      - 64
+      - 64
+    hid_S: 16
+    hid_T: 256
+    N_S: 4
+    N_T: 4
+    incep_ker:
+      - 3
+      - 5
+      - 7
+      - 11
+    groups: 4
+    Dis:
+      input_c: 1
+      hidden_size: 32
+      use_sigmoid: True
+  SimVP_PreTrain: "/home/sp/projects/git_update/OpenGait/output/CASIA-B/SimVP_Rec/Phase_Rec_WITH_DIS_MULTY/checkpoints/Phase_Rec_WITH_DIS_MULTY-25000.pt"
 
 optimizer_cfg:
   lr: 0.1
@@ -67,23 +95,32 @@ trainer_cfg:
   enable_float16: true # half_percesion float for memory reduction and speedup
   fix_BN: false
   log_iter: 100
-  with_test: false
+  with_test: true
   restore_ckpt_strict: true
   restore_hint: 0
-  save_iter: 30000
-  save_name: DeepGaitV2
+  save_iter: 10000
+  save_name: DeepGaitV2_Rec
   sync_BN: true
   total_iter: 60000
   sampler:
     batch_shuffle: true
     batch_size:
-      - 8 # TripletSampler, batch_size[0] indicates Number of Identity
-      - 16 #                 batch_size[1] indicates Samples sequqnce for each Identity
+      - 16 # TripletSampler, batch_size[0] indicates Number of Identity
+      - 8 #                 batch_size[1] indicates Samples sequqnce for each Identity
     frames_num_fixed: 30 # fixed frames number for training
     frames_skip_num: 4
     sample_type: fixed_ordered # fixed control input frames number, unordered for controlling order of input tensor; Other options: unfixed_ordered or all_ordered
     type: TripletSampler
   transform:
+    - type: Compose
+      trf_cfg:
+        - type: RandomPerspective
+          prob: 0.2
+        - type: BaseSilCuttingTransform
+        - type: RandomHorizontalFlip
+          prob: 0.2
+        - type: RandomRotate
+          prob: 0.2
     - type: Compose
       trf_cfg:
         - type: RandomPerspective

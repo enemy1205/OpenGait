@@ -9,7 +9,8 @@
             "type": "python",
             "request": "launch",
             "program": "${file}",
-            "args": ["--cfgs=configs/parsinggait/parsinggait_gait3d_parsing.yaml", "--phase=train"],
+            "env": {"CUDA_VISIBLE_DEVICES":"0"},
+            "args": ["--cfgs=configs/gaitrec/e2e_rec_sttn_dpv2_2_opt.yaml", "--phase=train"],
             "console": "integratedTerminal",
             "justMyCode": true
         }

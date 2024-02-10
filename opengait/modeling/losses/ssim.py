@@ -37,9 +37,9 @@ def _ssim(img1, img2, window, window_size, channel, size_average = True):
     else:
         return ssim_map.mean(1).mean(1).mean(1)
 
-class SSIM(BaseLoss):
+class SSIM_Dissimilarity(BaseLoss):
     def __init__(self,loss_term_weight=1.0, window_size = 3, size_average = True):
-        super(SSIM, self).__init__(loss_term_weight)
+        super(SSIM_Dissimilarity, self).__init__(loss_term_weight)
         self.window_size = window_size
         self.size_average = size_average
         self.channel = 1
@@ -50,17 +50,18 @@ class SSIM(BaseLoss):
 
         if channel == self.channel and self.window.data.type() == img1.data.type():
             window = self.window.type_as(img1)
+            img2 = img2.type_as(img1)
         else:
             window = create_window(self.window_size, channel)
             
             if img1.is_cuda:
                 window = window.cuda(img1.get_device())
             window = window.type_as(img1)
-            
+            img2 = img2.type_as(img1)
             self.window = window
             self.channel = channel
 
-        ssim_loss = _ssim(img1, img2, window, self.window_size, channel, self.size_average)
+        ssim_loss = (1-_ssim(img1, img2, window, self.window_size, channel, self.size_average))/2
         
         self.info.update({
             'ssim_loss':ssim_loss.detach().clone()
@@ -75,8 +76,8 @@ def ssim(img1, img2, window_size = 5, size_average = True):
     if img1.is_cuda:
         window = window.cuda(img1.get_device())
     window = window.type_as(img1)
-    
-    return _ssim(img1, img2, window, window_size, channel, size_average)
+    ssim_d = (1-_ssim(img1, img2, window, window_size, channel, size_average))/2
+    return ssim_d
 
 
 def psnr(img1, img2):

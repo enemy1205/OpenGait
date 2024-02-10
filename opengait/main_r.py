@@ -62,7 +62,7 @@ if __name__ == '__main__':
     import os
     # os.environ['CUDA_VISIBLE_DEVICES'] = '1'
     os.environ['MASTER_ADDR'] = 'localhost'
-    os.environ['MASTER_PORT'] = '5679'
+    os.environ['MASTER_PORT'] = '5680'
     dist.init_process_group(backend='nccl', init_method='env://', rank = 0, world_size = 1)
     cfgs = config_loader(opt.cfgs)
     if opt.iter != 0:
@@ -79,7 +79,7 @@ if __name__ == '__main__':
 # if __name__ == '__main__':
 #     torch.distributed.init_process_group('nccl', init_method='env://')
 #     if torch.distributed.get_world_size() != torch.cuda.device_count():
-#         raise ValueError("Expect number of available GPUs({}) equals to the world size({}).".format(
+#         raise ValueError("Expect number of axailable GPUs({}) equals to the world size({}).".format(
 #             torch.cuda.device_count(), torch.distributed.get_world_size()))
 #     cfgs = config_loader(opt.cfgs)
 #     if opt.iter != 0:

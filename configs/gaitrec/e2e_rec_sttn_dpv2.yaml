@@ -1,0 +1,115 @@
+data_cfg:
+  dataset_name: CASIA-B
+  dataset_root: /home/sp/datasets/CASIA_B/silhouettes_seg_cut_pkl
+  dataset_partition: ./datasets/CASIA-B/CASIA-B.json
+  num_workers: 12
+  remove_no_gallery: false # Remove probe if no gallery for it
+  test_dataset_name: CASIA-B
+
+evaluator_cfg:
+  enable_float16: true
+  restore_ckpt_strict: true
+  restore_hint: 0
+  save_name: Phase_Rec_STTN_DPV2
+  eval_func: evaluate_gait_rec
+  sampler:
+    batch_shuffle: false
+    batch_size: 8
+    sample_type: all_ordered
+    frames_all_limit: 720
+  transform:
+    - type: BaseSilCuttingTransform
+    - type: BaseSilCuttingTransform
+
+loss_cfg:
+  - loss_term_weight: 1
+    type: AdversarialLoss
+    log_prefix: adv
+  - loss_term_weight: 1
+    type: GanLoss
+    log_prefix: gan
+    imgloss_type: 'L1'
+    adversarial_weight: 1
+    img_weight: 100
+  - loss_term_weight: 1
+    margin: 0.2
+    type: TripletLoss
+    log_prefix: triplet
+  - loss_term_weight: 1.0
+    scale: 16
+    type: CrossEntropyLoss
+    log_prefix: softmax
+    log_accuracy: true
+
+model_cfg:
+  model: STTN_E2E
+  Gait:
+    Backbone:
+      mode: p3d
+      in_channels: 1
+      layers:
+        - 1
+        - 1
+        - 1
+        - 1
+      channels: 
+        - 64
+        - 128 
+        - 256
+        - 512
+    SeparateBNNecks:
+      class_num: 74
+  Gen:
+    channel: 128
+    stack_num: 2
+    patchsize: [[1,4]]
+  Dis:
+    input_c: 1
+    hidden_size: 32
+    use_sigmoid: True
+  lr_D: 0.0001
+  lr_gait: 0.0001
+
+optimizer_cfg:
+  lr: 0.0001
+  betas:
+    - 0
+    - 0.99
+  solver: Adam
+  weight_decay: 0.0005
+
+scheduler_cfg:
+  gamma: 0.1
+  milestones: # Learning Rate Reduction at each milestones
+    - 35000
+    - 50000
+  scheduler: MultiStepLR
+
+trainer_cfg:
+  enable_float16: true # half_percesion float for memory reduction and speedup
+  with_test: true
+  log_iter: 100
+  restore_ckpt_strict: false
+  restore_hint: 0
+  optimizer_reset: true
+  scheduler_reset: true
+  sync_BN: true
+  save_iter: 10000
+  save_name: E2E_Rec_STTN_DPV2
+  total_iter: 60000
+  sampler:
+    batch_shuffle: false
+    batch_size:
+      - 8 # TripletSampler, batch_size[0] indicates Number of Identity
+      - 4 #                 batch_size[1] indicates Samples sequqnce for each Identity
+    # frames_num_fixed: 30
+    # frames_skip_num: 0
+    frames_num_fixed: 30 # fixed frames number for training
+    frames_num_max: 40 # max frames number for unfixed training
+    frames_num_min: 20 # min frames number for unfixed traing
+    sample_type: fixed_ordered
+    frames_skip_num: 0
+    type: TripletSampler
+  transform:
+    - type: BaseSilCuttingTransform
+    - type: BaseSilCuttingTransform

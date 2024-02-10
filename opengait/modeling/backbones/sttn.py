@@ -24,6 +24,7 @@ class BinaryActivation(nn.Module):
         grad_input = grad_output.clone() 
         return grad_input
 
+
 class ThresholdBinary(torch.nn.Module):
     def __init__(self, threshold):
         super(ThresholdBinary, self).__init__()
@@ -310,8 +311,4 @@ class Inpainter(nn.Module):
         
         return recovered_sils,real_sils_embs,fake_sils_embs,interpolates,d_interpolates,gen_vid_feat
     
-if __name__ == "__main__":
-    import os
-    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
-    

@@ -1,7 +1,7 @@
 data_cfg:
   dataset_name: CASIA-B
-  dataset_root: your_path
-  num_workers: 1
+  dataset_root: /home/sp/datasets/CASIA_B/silhouettes_seg_cut_pkl
+  num_workers: 12
   remove_no_gallery: false
   test_dataset_name: CASIA-B
 
@@ -15,6 +15,9 @@ evaluator_cfg:
     sample_type: all_ordered
     type: InferenceSampler
   metric: euc # cos
+  transform:
+    - type: BaseSilTransform
+    - type: BaseSilTransform
 
 loss_cfg:
   loss_term_weight: 1.0
@@ -74,3 +77,6 @@ trainer_cfg:
     frames_num_min: 25
     sample_type: fixed_unordered
     type: TripletSampler
+  transform:
+    - type: BaseSilTransform
+    - type: BaseSilTransform
