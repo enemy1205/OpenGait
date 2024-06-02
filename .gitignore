@@ -5,7 +5,7 @@ __pycache__/
 
 # configuration
 ./config/*
-
+*.yaml
 # checkpoint
 *.pt
 

@@ -49,6 +49,10 @@ class BaseSilCuttingTransform():
         self.cutting = cutting
 
     def __call__(self, x):
+        # min_imgs = []
+        # for i in range(x.shape[0]):
+        #     min_imgs.append(cv2.resize(x[i], (64, 64), interpolation=cv2.INTER_AREA))
+        # x = np.array(min_imgs)
         if self.cutting is not None:
             cutting = self.cutting
         else:

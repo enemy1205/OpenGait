@@ -2,12 +2,12 @@ import torch.optim as optim
 import os.path as osp
 from ..base_model import BaseModel
 from .deepgaitv2 import DeepGaitV2_NO_Base
-from ..backbones.sttn_swingait import InpaintGenerator,Discriminator
+from ..backbones.sttn import InpaintGenerator,Discriminator
 from utils import get_valid_args, get_attr_from,mkdir
 import numpy as np
 import torch
     
-class STTN_E2E(BaseModel):
+class STTN_E2E_CONCAT(BaseModel):
     
     def build_network(self, model_cfg):
         self.netGait = DeepGaitV2_NO_Base(model_cfg['Gait'])
@@ -102,12 +102,14 @@ class STTN_E2E(BaseModel):
         ipts, labs, _, _, seqL = inputs
         # ipts[0 or 1] : [b,t,h,w]
         gt_sils = ipts[0].unsqueeze(2)
-        occ_sils = ipts[1]
-        # occ_sils = ipts[1].unsqueeze(2)
-        b, t, c, h, w = gt_sils.size()
+        occ_sils = ipts[1].unsqueeze(2)
+        b, t, c, h, w = occ_sils.size()
         # NetG input : [b,x,c,h,w]
-        # recovered_sils : [b*t,1,h,w]
-        recovered_sils = self.netGen(occ_sils)
+        # recovered_sils : [b,t,1,h,w]
+        # enc_feat : [b,128,t,h/4,w/4]
+        recovered_sils,enc_feat = self.netGen(occ_sils)
+        
+        recovered_sils = recovered_sils.view(b*t, c, h, w)
         gt_sils = gt_sils.view(b*t, c, h, w)
         
         real_sils_embs = self.netDis(gt_sils)
@@ -121,11 +123,11 @@ class STTN_E2E(BaseModel):
                 'gan': {'pred_silt_video':recovered_sils,'gt_silt_video':gt_sils,'gen_vid_feat':gen_vid_feat}
             },
             'visual_summary': {
-                'image/gt_sils': gt_sils, 'image/occ_sils': occ_sils.view(b*t, c, h, w), "image/rec_sils": recovered_sils            
+                'image/gt_sils': gt_sils, 'image/occ_sils': occ_sils.view(b*t, c, h, w), "image/rec_sils": recovered_sils.view(b*t, c, h, w)            
             },
             'inference_feat': {
                 'gt': gt_sils.view(b*t, c, h, w),
-                'pred': recovered_sils
+                'pred': recovered_sils.view(b*t, c, h, w)
             }
         }
         retval_gait = self.netGait([[recovered_sils.view(b,t, h, w)], labs, None, None, seqL])

@@ -23,11 +23,11 @@ from abc import ABCMeta
 from abc import abstractmethod
 
 from . import backbones
-from .loss_aggregator import LossAggregator,LossAggregator_Mul
+from .loss_aggregator import LossAggregator
 from data.transform import get_transform
 from data.collate_fn import CollateFn
 from data.dataset_occ import OcclusionDataSet
-# from data.dataset import DataSet
+from data.dataset import DataSet
 import data.sampler as Samplers
 from utils import Odict, mkdir, ddp_all_gather
 from utils import get_valid_args, is_list, is_dict, np2var, ts2np, list2var, get_attr_from
@@ -37,7 +37,17 @@ from utils import get_msg_mgr
 
 __all__ = ['BaseModel']
 
-
+class bcolors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+ 
+ 
 class MetaModel(metaclass=ABCMeta):
     """The necessary functions for the base model.
 
@@ -163,7 +173,6 @@ class BaseModel(MetaModel, nn.Module):
             "cuda", self.device))
 
         if training:
-            # self.loss_aggregator = LossAggregator_Mul(cfgs['loss_cfg'])
             self.loss_aggregator = LossAggregator(cfgs['loss_cfg'])
             self.optimizer = self.get_optimizer(self.cfgs['optimizer_cfg'])
             self.scheduler = self.get_scheduler(cfgs['scheduler_cfg'])
@@ -206,8 +215,8 @@ class BaseModel(MetaModel, nn.Module):
 
     def get_loader(self, data_cfg, train=True):
         sampler_cfg = self.cfgs['trainer_cfg']['sampler'] if train else self.cfgs['evaluator_cfg']['sampler']
-        # dataset = DataSet(data_cfg, train)
-        dataset = OcclusionDataSet(data_cfg, train)
+        dataset = DataSet(data_cfg, train)
+        # dataset = OcclusionDataSet(data_cfg, train)
         Sampler = get_attr_from([Samplers], sampler_cfg['type'])
         vaild_args = get_valid_args(Sampler, sampler_cfg, free_keys=[
             'sample_type', 'type'])
@@ -418,7 +427,8 @@ class BaseModel(MetaModel, nn.Module):
                 continue
 
             visual_summary.update(loss_info)
-            visual_summary['scalar/learning_rate'] = model.optimizer[0].param_groups[0]['lr']
+            # visual_summary['scalar/learning_rate'] = model.optimizer[0].param_groups[0]['lr']
+            visual_summary['scalar/learning_rate'] = model.optimizer.param_groups[0]['lr']
 
             model.msg_mgr.train_step(loss_info, visual_summary)
             if model.iteration % model.engine_cfg['save_iter'] == 0:

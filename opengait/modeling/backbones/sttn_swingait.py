@@ -1,14 +1,17 @@
+''' Spatial-Temporal Transformer Networks
+'''
+import numpy as np
+import math
 import torch
 import torch.nn as nn
-from ..base_model import BaseModel
-from ..modules import HorizontalPoolingPyramid, PackSequenceWrapper, SeparateFCs, SeparateBNNecks, SetBlockWrapper, ParallelBN1d
-
-# ******* Copy from https://github.com/haofanwang/video-swin-transformer-pytorch/blob/main/video_swin_transformer.py *******
+import torch.nn.functional as F
+from torch import Tensor
+from .spectral_norm import spectral_norm as _spectral_norm
 from functools import reduce, lru_cache
 from operator import mul
 from einops import rearrange
+from ..modules import SetBlockWrapper
 
-import torch.nn.functional as F
 class Mlp(nn.Module):
     """ Multilayer perceptron."""
 
@@ -29,6 +32,19 @@ class Mlp(nn.Module):
         x = self.drop(x)
         return x
 
+class FeedForward(nn.Module):
+    def __init__(self, d_model):
+        super(FeedForward, self).__init__()
+        # We set d_ff as a default to 2048
+        self.conv = nn.Sequential(
+            nn.Conv2d(d_model, d_model, kernel_size=3, padding=2, dilation=2),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(d_model, d_model, kernel_size=3, padding=1),
+            nn.LeakyReLU(0.2, inplace=True))
+
+    def forward(self, x):
+        x = self.conv(x)
+        return x
 
 def window_partition(x, window_size):
     """
@@ -146,7 +162,7 @@ class WindowAttention3D(nn.Module):
     Args:
         dim (int): Number of input channels.
         window_size (tuple[int]): The temporal length, height and width of the window.
-        num_heads (int): Number of attention heads.
+                                                                                                                                   (int): Number of attention heads.
         qkv_bias (bool, optional):  If True, add a learnable bias to query, key, value. Default: True
         qk_scale (float | None, optional): Override default qk scale of head_dim ** -0.5 if set
         attn_drop (float, optional): Dropout ratio of attention weight. Default: 0.0
@@ -296,6 +312,7 @@ class SwinTransformerBlock3D(nn.Module):
 
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         self.norm2 = norm_layer(dim)
+        # self.feed_forward = FeedForward(dim)
         mlp_hidden_dim = int(dim * mlp_ratio)
         self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
 
@@ -336,7 +353,8 @@ class SwinTransformerBlock3D(nn.Module):
         return x
 
     def forward_part2(self, x):
-        return self.drop_path(self.mlp(self.norm2(x)))
+        return x+self.drop_path(self.mlp(self.norm2(x)))
+        # return x + self.drop_path(self.feed_forward(self.norm2(x)))
 
     def forward(self, x, mask_matrix):
         """ Forward function.
@@ -346,16 +364,9 @@ class SwinTransformerBlock3D(nn.Module):
         """
 
         shortcut = x
-        if self.use_checkpoint:
-            x = checkpoint.checkpoint(self.forward_part1, x, mask_matrix)
-        else:
-            x = self.forward_part1(x, mask_matrix)
+        x = self.forward_part1(x, mask_matrix)
         x = shortcut + self.drop_path(x)
-
-        if self.use_checkpoint:
-            x = x + checkpoint.checkpoint(self.forward_part2, x)
-        else:
-            x = x + self.forward_part2(x)
+        x = x + self.forward_part2(x)
 
         return x
 
@@ -435,7 +446,7 @@ class BasicLayer(nn.Module):
                  depth,
                  num_heads,
                  window_size=(1,7,7),
-                 mlp_ratio=4.,
+                 mlp_ratio=2.,
                  qkv_bias=False,
                  qk_scale=None,
                  drop=0.,
@@ -638,8 +649,8 @@ class SwinTransformer3D(nn.Module):
             
             self.layers.append(layer)
 
-        # self.num_features = int(embed_dim * 2**self.num_layers)
-        self.num_features = 512
+        self.num_features = int(embed_dim * 2**self.num_layers)
+        # self.num_features = 512
 
         # add a norm layer for each output
         self.norm = norm_layer(self.num_features)
@@ -746,7 +757,8 @@ class SwinTransformer3D(nn.Module):
 
     def forward(self, x):
         """Forward function."""
-        x = self.patch_embed(x)
+        # x [b, c, t, h, w]
+        x = self.patch_embed(x) # [b, c, t/p_s[0], h/p_s[1], w/p_s[2]]
 
         x = self.pos_drop(x)
 
@@ -764,261 +776,144 @@ class SwinTransformer3D(nn.Module):
         super(SwinTransformer3D, self).train(mode)
         self._freeze_stages()
 
-# ******* Copy from https://github.com/haofanwang/video-swin-transformer-pytorch/blob/main/video_swin_transformer.py *******
 
-def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
-    """3x3 convolution with padding"""
-    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
-                     padding=dilation, groups=groups, bias=False, dilation=dilation)
+class InpaintGenerator(nn.Module):
+    def __init__(self,model_cfg):
+        super(InpaintGenerator, self).__init__()
+        # the default param reference
+        if model_cfg is None:
+            channel = 256
+            stack_num = 4
+            patchsize = [(4,4),(2,2)]
+        else:
+            channel = model_cfg['channel']
+            stack_num = model_cfg['stack_num']
+            patchsize = model_cfg['patchsize']
 
-def conv1x1(in_planes, out_planes, stride=1):
-    """1x1 convolution"""
-    return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
+        # self.transformer = SwinTransformer3D(            
+        #     patch_size = [1, 2, 2], 
+        #     in_chans = channel, 
+        #     embed_dim = 128, 
+        #     depths = [2,], 
+        #     num_heads = [2,4], 
+        #     window_size = [5, 3, 2], 
+        #     drop_path_rate = 0.1, 
+        #     patch_norm = True, 
+        #     )
+        window_size = [5, 3, 2]
+        shift_size = tuple(i // 2 for i in window_size)
+        blocks = []
+        num_heads = [2,4]
+        for i in range(stack_num):
+            blocks.append(SwinTransformerBlock3D(                
+                dim=128,
+                num_heads=num_heads[i],
+                window_size=window_size,
+                shift_size=(0,0,0) if (i % 2 == 0) else shift_size,
+                mlp_ratio= 1.,
+                qkv_bias=False))
+        self.transformer = nn.Sequential(*blocks)
+        self.encoder = nn.Sequential(
+            nn.Conv2d(1, 64, kernel_size=3, stride=2, padding=1),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(128, channel, kernel_size=3, stride=1, padding=1),
+            nn.LeakyReLU(0.2, inplace=True),
+        )
+        self.encoder = SetBlockWrapper(self.encoder)
+        # decoder: decode frames from features
+        self.decoder = nn.Sequential(
+            deconv(channel, 128, kernel_size=3, padding=1),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(128, 64, kernel_size=3, stride=1, padding=1),
+            nn.LeakyReLU(0.2, inplace=True),
+            deconv(64, 64, kernel_size=3, padding=1),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(64, 1, kernel_size=3, stride=1, padding=1),
+            nn.LeakyReLU(0.2, inplace=True)
+        )
+        self.decoder = SetBlockWrapper(self.decoder)
 
-# import copy
+    def forward(self, masks): 
+        if len(masks.size()) == 4:
+            masks = masks.unsqueeze(1)
+        # extracting features
+        enc_feat = self.encoder(masks)
+        B, C, D, H, W = enc_feat.shape
+        x = rearrange(enc_feat, 'b c d h w -> b d h w c')
+        for blk in self.transformer:
+            x = blk(x, None)
+        x = x.view(B, D, H, W, -1)
+        x = rearrange(x, 'b d h w c -> b c d h w')
+        output = self.decoder(x)
+        n, c, s, h, w = output.size()
+        output = output+masks
+        return output
+        
 
-from ..modules import BasicBlock2D, BasicBlockP3D
 
-import torch.optim as optim
-import os.path as osp
-from collections import OrderedDict
-from utils import get_valid_args, get_attr_from
-import cv2
-import os
+class deconv(nn.Module):
+    def __init__(self, input_channel, output_channel, kernel_size=3, padding=0):
+        super().__init__()
+        self.conv = nn.Conv2d(input_channel, output_channel,
+                              kernel_size=kernel_size, stride=1, padding=padding)
 
-class SwinGait(BaseModel):
-    def __init__(self, cfgs, training): 
-        self.T_max_iter = cfgs['trainer_cfg']['T_max_iter']
-        super(SwinGait, self).__init__(cfgs, training=training)
+    def forward(self, x):
+        x = F.interpolate(x, scale_factor=2, mode='bilinear',
+                          align_corners=True)
+        return self.conv(x)
 
-    def build_network(self, model_cfg):
-        channels = model_cfg['Backbone']['channels']
-        layers   = model_cfg['Backbone']['layers']
-        in_c     = model_cfg['Backbone']['in_channels']
 
-        self.inplanes = channels[0]
-        self.layer0 = SetBlockWrapper(nn.Sequential(
-            conv3x3(in_c, self.inplanes, 1), 
-            nn.BatchNorm2d(self.inplanes), 
-            nn.ReLU(inplace=True)
-        ))
-        self.layer1 = SetBlockWrapper(self.make_layer(BasicBlock2D, channels[0], stride=[1, 1], blocks_num=layers[0], mode='2d'))
-        self.layer2 = self.make_layer(BasicBlockP3D, channels[1], stride=[2, 2], blocks_num=layers[1], mode='p3d')
+# #############################################################################
+# #############################################################################
 
-        self.ulayer = SetBlockWrapper(nn.UpsamplingBilinear2d(size=(30, 20)))
-
-        self.transformer = SwinTransformer3D(
-            patch_size = [1, 2, 2], 
-            in_chans = channels[1], 
-            embed_dim = 256, 
-            depths = [layers[2], layers[3]], 
-            num_heads = [16, 32], 
-            window_size = [3, 3, 5], 
-            downsample = [1, 0], 
-            drop_path_rate = 0.1, 
-            patch_norm = True, 
+class Discriminator(nn.Module):
+    def __init__(self,model_cfg, use_sigmoid=False, use_spectral_norm=True):
+        super(Discriminator, self).__init__()
+        
+        if model_cfg is None:
+            in_channels = 1
+            nf = 64.
+            self.use_sigmoid = use_sigmoid
+        else:
+            in_channels = model_cfg['input_c']
+            nf = model_cfg['hidden_size']
+        self.use_sigmoid = model_cfg['use_sigmoid'] if model_cfg['use_sigmoid'] is not None else use_sigmoid
+        self.conv = nn.Sequential(
+            spectral_norm(nn.Conv3d(in_channels=in_channels, out_channels=nf*1, kernel_size=(3, 5, 5), stride=(1, 2, 2),
+                                    padding=1, bias=not use_spectral_norm), use_spectral_norm),
+            # nn.InstanceNorm2d(64, track_running_stats=False),
+            nn.LeakyReLU(0.2, inplace=True),
+            spectral_norm(nn.Conv3d(nf*1, nf*2, kernel_size=(3, 5, 5), stride=(1, 2, 2),
+                                    padding=(1, 2, 2), bias=not use_spectral_norm), use_spectral_norm),
+            # nn.InstanceNorm2d(128, track_running_stats=False),
+            nn.LeakyReLU(0.2, inplace=True),
+            spectral_norm(nn.Conv3d(nf * 2, nf * 4, kernel_size=(3, 5, 5), stride=(1, 2, 2),
+                                    padding=(1, 2, 2), bias=not use_spectral_norm), use_spectral_norm),
+            # nn.InstanceNorm2d(256, track_running_stats=False),
+            nn.LeakyReLU(0.2, inplace=True),
+            spectral_norm(nn.Conv3d(nf * 4, nf * 4, kernel_size=(3, 5, 5), stride=(1, 2, 2),
+                                    padding=(1, 2, 2), bias=not use_spectral_norm), use_spectral_norm),
+            # nn.InstanceNorm2d(256, track_running_stats=False),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv3d(nf * 4, nf * 4, kernel_size=(3, 5, 5),
+                      stride=(1, 2, 2), padding=(1, 2, 2))
         )
 
-        self.FCs = SeparateFCs(model_cfg['SeparateBNNecks']['parts_num'], in_channels=512, out_channels=256)
-        self.BNNecks = SeparateBNNecks(**model_cfg['SeparateBNNecks'])
-        self.TP = PackSequenceWrapper(torch.max)
-        self.HPP = HorizontalPoolingPyramid(bin_num=model_cfg['bin_num'])
+    def forward(self, xs):
+        # B, C, T, H, W
+        feat = self.conv(xs)
+        if self.use_sigmoid:
+            feat = torch.sigmoid(feat)
+        out = torch.transpose(feat, 1, 2)  # B, T, C, H, W
+        return out
+    
 
-    def get_optimizer(self, optimizer_cfg):
-        self.msg_mgr.log_info(optimizer_cfg)
-        optimizer = get_attr_from([optim], optimizer_cfg['solver'])
-        valid_arg = get_valid_args(optimizer, optimizer_cfg, ['solver'])
 
-        transformer_no_decay = ['patch_embed', 'norm', 'relative_position_bias_table']
-        transformer_params = list(self.transformer.named_parameters())
-        params_list = [
-            {'params': [p for n, p in transformer_params if any(nd in n for nd in transformer_no_decay)], 'lr': optimizer_cfg['lr'], 'weight_decay': 0.}, 
-            {'params': [p for n, p in transformer_params if not any(nd in n for nd in transformer_no_decay)], 'lr': optimizer_cfg['lr'], 'weight_decay': optimizer_cfg['weight_decay']}, 
-            {'params': self.FCs.parameters(), 'lr': optimizer_cfg['lr'] * 0.1, 'weight_decay': optimizer_cfg['weight_decay']}, 
-            {'params': self.BNNecks.parameters(), 'lr': optimizer_cfg['lr'] * 0.1, 'weight_decay': optimizer_cfg['weight_decay']}, 
-        ]
-        for i in range(5): 
-            if hasattr(self, 'layer%d'%i): 
-                params_list.append(
-                    {'params': getattr(self, 'layer%d'%i).parameters(), 'lr': optimizer_cfg['lr'] * 0.1, 'weight_decay': optimizer_cfg['weight_decay']}
-                )
-
-        optimizer = optimizer(params_list)
-        return optimizer
-
-    def init_parameters(self):
-        for m in self.modules():
-            if isinstance(m, nn.Linear):
-                trunc_normal_(m.weight, std=.02)
-                if isinstance(m, nn.Linear) and m.bias is not None:
-                    nn.init.constant_(m.bias, 0)
-            elif isinstance(m, nn.LayerNorm):
-                nn.init.constant_(m.bias, 0)
-                nn.init.constant_(m.weight, 1.0)
-            elif isinstance(m, (nn.Conv3d, nn.Conv2d, nn.Conv1d)):
-                nn.init.xavier_uniform_(m.weight.data)
-                if m.bias is not None:
-                    nn.init.constant_(m.bias.data, 0.0)
-            elif isinstance(m, (nn.BatchNorm3d, nn.BatchNorm2d, nn.BatchNorm1d)):
-                if m.affine:
-                    nn.init.normal_(m.weight.data, 1.0, 0.02)
-                    nn.init.constant_(m.bias.data, 0.0)
-
-    def make_layer(self, block, planes, stride, blocks_num, mode='2d'): 
-
-        if max(stride) > 1 or self.inplanes != planes * block.expansion: 
-            if mode == '3d': 
-                downsample = nn.Sequential(nn.Conv3d(self.inplanes, planes * block.expansion, kernel_size=[1, 1, 1], stride=stride, padding=[0, 0, 0], bias=False), nn.BatchNorm3d(planes * block.expansion))
-            elif mode == '2d':
-                downsample = nn.Sequential(conv1x1(self.inplanes, planes * block.expansion, stride=stride), nn.BatchNorm2d(planes * block.expansion))
-            elif mode == 'p3d':
-                downsample = nn.Sequential(nn.Conv3d(self.inplanes, planes * block.expansion, kernel_size=[1, 1, 1], stride=[1, *stride], padding=[0, 0, 0], bias=False), nn.BatchNorm3d(planes * block.expansion))
-            else:
-                raise TypeError('xxx')
-        else: 
-            downsample = lambda x: x
-
-        layers = [block(self.inplanes, planes, stride=stride, downsample=downsample)]
-        self.inplanes = planes * block.expansion
-        s = [1, 1] if mode in ['2d', 'p3d'] else [1, 1, 1]
-        for i in range(1, blocks_num): 
-            layers.append(
-                    block(self.inplanes, planes, stride=s)
-            )
-        return nn.Sequential(*layers)
-
-    def visual_heatmap(self, input_tensor, sils):
-        n, c, s, height, width = sils.size()
-        outputs = (input_tensor**2).sum(1)
-        # print(type(outputs))
-        outputs = outputs.squeeze()
-        
-        # print(outputs.size())
-        b, h, w = outputs.size()
-        outputs = outputs.view(b, h * w)
-        outputs = F.normalize(outputs, p=2, dim=1)
-        outputs = outputs.view(b, h, w)
-        IMAGENET_MEAN = [0.485, 0.456, 0.406]
-        IMAGENET_STD = [0.229, 0.224, 0.225]
-        images = list()
-        sils, outputs = sils.cpu(), outputs.cpu()
-        sils = sils.permute(0, 2, 1, 3, 4)
-        n, s, c, height, width = sils.size()
-        sils = sils.squeeze(dim=0)
-        for j in range(outputs.size(0)):
-            # img = sils[j, 0 , ...]
-            img = sils[j, ...]
-            img_mean = IMAGENET_MEAN
-            img_std = IMAGENET_STD
-            # for t, m, s in zip(img, img_mean, img_std):
-            #         t.mul_(s).add_(m).clamp_(0, 1)
-
-            img_np = np.uint8(np.floor(img.numpy() * 255))
-            # img_np = np.uint8(np.floor(img.numpy()))
-            img_np = img_np.transpose((1, 2, 0))# (c, h, w) -> (h, w, c)
-            new_img_np = np.zeros((64, 44, 3))  
-            new_img_np[:, :, :2] = img_np
-            new_img_np[:, :, 2] = img_np[:, :, 0]
-
-            am = outputs[j, ...].numpy()
-            am = cv2.resize(am, (width, height))
-            am = 255 * (am - np.min(am)) / (
-                np.max(am) - np.min(am) + 1e-12
-            )
-            am = np.uint8(np.floor(am))
-            am = cv2.applyColorMap(am, cv2.COLORMAP_JET)
-            # overlapped
-            overlapped = new_img_np*0.3 + am*0.7
-            # overlapped = am
-            # overlapped = new_img_np
-            overlapped[overlapped > 255] = 255
-            overlapped = overlapped.astype(np.uint8)
-            # H, W, C = overlapped.shape
-            # crop_h = int(0.1 * H)
-            # crop_w = int(0.1 * W)
-
-            # # 裁剪操作
-            # cropped_image = overlapped[crop_h:-crop_h, crop_w:-crop_w, :]
-            # cropped_image = cv2.resize(cropped_image, (width, height))
-            images.append(overlapped)
-
-        return images
-
-    def forward(self, inputs):
-        if self.training:
-            adjust_learning_rate(self.optimizer, self.iteration, T_max_iter=self.T_max_iter)
-        ipts, labs, _, _, seqL = inputs
-
-        sils = ipts[0].unsqueeze(1)
-
-        del ipts
-
-        out0 = self.layer0(sils) # [n, 64, s, h, w]
-        out1 = self.layer1(out0) # [n, 64, s, h, w]
-        out2 = self.layer2(out1) # [n, 128, s, h/2, w/2]
-        
-        # dataset = 'gait3d_layer2_1'
-        # images = self.visual_heatmap(out2, sils)
-        # ipts, labs1, var1, var2, seqL1 = inputs
-        # seqL1 = seqL1.cpu()
-        # seqL1 = seqL1.numpy()
-        # seqL1 = seqL1.tolist()
-        # num = 0
-        # i = 0
-        # for lab,sub,view in zip(labs1,var1,var2):
-        #     seq = seqL1[0][num]
-        #     for seqnum in range(int(seq)):
-        #         ske_save_path = "/home/sp/projects/git_update/OpenGait/output/vis/{}/{:03d}/{}/{}".format(dataset,lab, sub,view)
-        #         if osp.exists(ske_save_path) is False:
-        #             os.makedirs(ske_save_path)
-        #         ske_save_name = "{}/{}-sils.png".format(ske_save_path,seqnum)
-        #         cv2.imwrite(ske_save_name,images[i])
-        #         i+=1
-        #     num+=1
-
-        out2 = self.ulayer(out2) # [n, 128, s, h/2-2=30 , w/2-2=20]
-        out4 = self.transformer(out2) # [n, 512,s, 15, 10]
-
-        # Temporal Pooling, TP
-        outs = self.TP(out4, seqL, options={"dim": 2})[0]  # [n, c,15, 10]
-        # Horizontal Pooling Matching, HPM
-        feat = self.HPP(outs)  # [n, c, p]
-
-        feat = torch.cat([feat, feat[:, :, -1].clone().detach().unsqueeze(-1)], dim=-1)
-        embed_1 = self.FCs(feat)  # [n, c, p]
-        embed_2, logits = self.BNNecks(embed_1)  # [n, c, p]
-        embed_1 = embed_1.contiguous()[:, :, :-1]  # [n, p, c]
-        embed_2 = embed_2.contiguous()[:, :, :-1]  # [n, p, c]
-        logits = logits.contiguous()[:, :, :-1]  # [n, p, c]
-
-        embed = embed_1
-
-        retval = {
-            'training_feat': {
-                'triplet': {'embeddings': embed_1, 'labels': labs},
-                'softmax': {'logits': logits, 'labels': labs}
-            },
-            'visual_summary': {
-                'image/sils': rearrange(sils,'n c s h w -> (n s) c h w')
-            },
-            'inference_feat': {
-                'embeddings': embed
-            }
-        }
-        return retval
-
-import math
-def adjust_learning_rate(optimizer, iteration, iteration_per_epoch=1000, T_max_iter=10000, min_lr=1e-6):
-    """Decay the learning rate based on schedule"""
-    if iteration < T_max_iter:
-        if iteration % iteration_per_epoch == 0 :
-            alpha = 0.5 * (1. + math.cos(math.pi * iteration / T_max_iter))
-            for param_group in optimizer.param_groups:
-                param_group['lr'] = max(param_group['initial_lr'] * alpha, min_lr)
-        else:
-            pass
-    elif iteration == T_max_iter:
-        for param_group in optimizer.param_groups:
-                param_group['lr'] = min_lr
-    else:
-        pass
+def spectral_norm(module, mode=True):
+    if mode:
+        return _spectral_norm(module)
+    return module

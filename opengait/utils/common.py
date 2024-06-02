@@ -174,7 +174,7 @@ def ddp_all_gather(features, dim=0, requires_grad=True):
     rank = torch.distributed.get_rank()
     feature_list = [torch.ones_like(features) for _ in range(world_size)]
     torch.distributed.all_gather(feature_list, features.contiguous())
-
+    # torch.autograd.set_detect_anomaly(True)
     if requires_grad:
         feature_list[rank] = features
     feature = torch.cat(feature_list, dim=dim)

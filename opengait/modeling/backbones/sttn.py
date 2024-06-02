@@ -52,7 +52,6 @@ class InpaintGenerator(nn.Module):
         for _ in range(stack_num):
             blocks.append(TransformerBlock(patchsize, hidden=channel))
         self.transformer = nn.Sequential(*blocks)
-
         self.encoder = nn.Sequential(
             nn.Conv2d(1, 64, kernel_size=3, stride=2, padding=1),
             nn.LeakyReLU(0.2, inplace=True),
@@ -81,15 +80,16 @@ class InpaintGenerator(nn.Module):
             masks = masks.unsqueeze(2)
         # extracting features
         b, t, c, h, w = masks.size()
+        
         masks = masks.view(b*t, c, h, w)
-        enc_feat = self.encoder(masks)
+        enc_feat = self.encoder(masks) # n*t,128,h/4,w/4
         _, c, h, w = enc_feat.size()
         # masks = F.interpolate(masks, scale_factor=1.0/4)
         enc_feat = self.transformer(
             {'x': enc_feat,'b': b, 'c': c})['x']
         output = self.decoder(enc_feat)
         # return output+masks
-        return output
+        return output,enc_feat.view(b, t, c, h, w)
         
     def infer(self, feat, masks):
         t, c, h, w = masks.size()
@@ -263,7 +263,7 @@ class Discriminator(nn.Module):
 
     def forward(self, xs):
         # T, C, H, W = xs.shape
-        xs_t = torch.transpose(xs, 0, 1)
+        xs_t = torch.transpose(xs, 0, 1) 
         xs_t = xs_t.unsqueeze(0)  # B, C, T, H, W
         feat = self.conv(xs_t)
         if self.use_sigmoid:

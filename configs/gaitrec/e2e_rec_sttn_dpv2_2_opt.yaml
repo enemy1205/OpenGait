@@ -18,8 +18,8 @@ evaluator_cfg:
     sample_type: all_ordered
     frames_all_limit: 720
   transform:
-    - type: BaseSilCuttingTransform
-    - type: BaseSilCuttingTransform
+    - type: BaseSilTransform
+    - type: BaseSilTransform
 
 loss_cfg:
   - loss_term_weight: 1
@@ -61,8 +61,8 @@ model_cfg:
       class_num: 74
   Gen:
     channel: 128
-    stack_num: 1
-    patchsize: [[1,4],[1,2]]
+    stack_num: 2
+    patchsize: [[1,4]]
   Dis:
     input_c: 1
     hidden_size: 32
@@ -70,14 +70,11 @@ model_cfg:
   lr_D: 0.0001
 
 optimizer_cfg:
-  - solver: Adam
-    lr: 0.0001
-    betas:
-      - 0
-      - 0.99
-    weight_decay: 0.0005
+  - lr: 0.01
+    solver: AdamW
+    weight_decay: 0.02
   - solver: SGD  
-    lr: 0.1
+    lr: 0.001
     momentum: 0.9
     weight_decay: 0.0005
 
@@ -99,7 +96,7 @@ trainer_cfg:
   scheduler_reset: true
   sync_BN: true
   save_iter: 10000
-  save_name: E2E_Rec_STTN_2_OPT_1_STACK_2_PATCH
+  save_name: E2E_Rec_STTN_2_OPT_2_STACK_SWIN
   total_iter: 60000
   sampler:
     batch_shuffle: false
@@ -115,5 +112,5 @@ trainer_cfg:
     frames_skip_num: 0
     type: TripletSampler
   transform:
-    - type: BaseSilCuttingTransform
-    - type: BaseSilCuttingTransform
+    - type: BaseSilTransform
+    - type: BaseSilTransform

@@ -1,15 +1,15 @@
 data_cfg:
   dataset_name: Gait3D
-  dataset_root: your_path
+  dataset_root: /home/sp/datasets/Gait3D/2D_Silhouettes_128-128-pkl
   dataset_partition: ./datasets/Gait3D/Gait3D.json
-  num_workers: 1
+  num_workers: 8
   remove_no_gallery: false # Remove probe if no gallery for it
   test_dataset_name: Gait3D
 
 evaluator_cfg:
   enable_float16: true
   restore_ckpt_strict: true
-  restore_hint: 80000
+  restore_hint: 0
   save_name: SwinGait3D_B1442_C2
   sampler:
     batch_shuffle: false
@@ -19,7 +19,8 @@ evaluator_cfg:
   eval_func: evaluate_Gait3D
   metric: euc # cos
   transform:
-    - type: BaseSilTransform
+    - type: BaseSilCuttingTransform
+      img_w: 128
 
 loss_cfg:
   - loss_term_weight: 1.0
@@ -35,7 +36,7 @@ loss_cfg:
 model_cfg:
   model: SwinGait
   Backbone:
-    mode: p3d
+    mode: 3d
     in_channels: 1
     layers:
       - 1
@@ -67,20 +68,20 @@ trainer_cfg:
   enable_float16: true # half_percesion float for memory reduction and speedup
   fix_BN: false
   log_iter: 100
-  with_test: false
-  optimizer_reset: True
+  with_test: true
+  optimizer_reset: true
   restore_ckpt_strict: false
-  restore_hint: ./output/Gait3D/DeepGaitV2/DeepGaitV2_B1441_C2_P3D/checkpoints/DeepGaitV2_B1441_C2_P3D-60000.pt
+  restore_hint: 0
   save_iter: 20000
-  save_name: SwinGait3D_B1442_C2
+  save_name: SwinGait3D_128
   sync_BN: true
   T_max_iter: 60000
-  total_iter: 80000
+  total_iter: 120000
   sampler:
     batch_shuffle: true
     batch_size:
-      - 32 # TripletSampler, batch_size[0] indicates Number of Identity
-      - 4 #                 batch_size[1] indicates Samples sequqnce for each Identity
+      - 4 # TripletSampler, batch_size[0] indicates Number of Identity
+      - 2 #                 batch_size[1] indicates Samples sequqnce for each Identity
     frames_num_fixed: 30 # fixed frames number for training
     frames_skip_num: 4
     sample_type: fixed_ordered # fixed control input frames number, unordered for controlling order of input tensor; Other options: unfixed_ordered or all_ordered
@@ -90,7 +91,8 @@ trainer_cfg:
       trf_cfg:
         - type: RandomPerspective
           prob: 0.2
-        - type: BaseSilTransform
+        - type: BaseSilCuttingTransform
+          img_w: 128
         - type: RandomHorizontalFlip
           prob: 0.2
         - type: RandomRotate

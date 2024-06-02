@@ -1,10 +1,10 @@
 # # **************** For CASIA-B ****************
 # # Baseline
-# CUDA_VISIBLE_DEVICES=0,1 python -m torch.distributed.launch --nproc_per_node=2 opengait/main.py --cfgs --nproc_per_node=2 configs/gaitrec/phase1_rec_sttn.yaml --phase train --log_to_file
-# CUDA_VISIBLE_DEVICES=0,1 torchrun --nproc_per_node=2 opengait/main.py --cfg configs/gaitrec/phase1_rec_sttn.yaml --phase train --log_to_file
-# CUDA_VISIBLE_DEVICES=2 python opengait/main_re.py --cfgs configs/gaitrec/e2e_rec_sttn_dpv2_edge.yaml --phase train --log_to_file
-# CUDA_VISIBLE_DEVICES=1 python opengait/main.py --cfgs configs/gaitrec/e2e_rec_sttn.yaml --phase train --log_to_file
-CUDA_VISIBLE_DEVICES=2 python opengait/main.py --cfgs configs/gaitrec/e2e_rec_sttn_dpv2_2_opt.yaml --phase train --log_to_file
+# CUDA_VISIBLE_DEVICES=0,1 python -m torch.distributed.launch --nproc_per_node=2 opengait/main.py --cfgs configs/gaitrec/phase1_rec_swin_sttn.yaml --phase train --log_to_file
+# CUDA_VISIBLE_DEVICES=0,1 torchrun --nproc_per_node=2 opengait/main.py --cfg configs/gaitrec/e2e_rec_fformer_dpv2_oumvlp_test.yaml --phase train --log_to_file
+# CUDA_VISIBLE_DEVICES=2 python opengait/main_r.py --cfgs configs/gaitfuse/fusegait_Gait3D.yaml --phase train --log_to_file
+# CUDA_VISIBLE_DEVICES=2 python opengait/main_r.py --cfgs configs/gaitrec/e2e_rec_fformer_dpv2_oumvlp_test.yaml --phase train --log_to_file
+CUDA_VISIBLE_DEVICES=0 python opengait/main_re.py --cfgs configs/gaitfuse/fusegait_grew.yaml --phase train --log_to_file
 
 # CUDA_VISIBLE_DEVICES=0,1 python -m torch.distributed.launch --nproc_per_node=2 opengait/main.py --cfgs ./configs/gaitset/gaitset.yaml --phase train
 

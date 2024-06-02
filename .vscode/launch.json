@@ -9,8 +9,8 @@
             "type": "python",
             "request": "launch",
             "program": "${file}",
-            "env": {"CUDA_VISIBLE_DEVICES":"0"},
-            "args": ["--cfgs=configs/gaitrec/e2e_rec_sttn_dpv2_2_opt.yaml", "--phase=train"],
+            "env": {"CUDA_VISIBLE_DEVICES":"2"},
+            "args": ["--cfgs=configs/gaitfuse/fusegait_Gait3D.yaml", "--phase=train"],
             "console": "integratedTerminal",
             "justMyCode": true
         }

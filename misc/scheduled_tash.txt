@@ -1,0 +1,7 @@
+nohup /home/sp/projects/git_update/OpenGait/train.sh > fusegait_14_sgd_extend.out &data_cfg:
+  dataset_name: Gait3D
+  dataset_root: /home/sp/datasets/Gait3D/2D_Silhouettes_64x64_pkl
+  dataset_partition: ./datasets/Gait3D/Gait3D.json
+  num_workers: 8
+  remove_no_gallery: false # Remove probe if no gallery for it
+  test_dataset_name: Gait3D

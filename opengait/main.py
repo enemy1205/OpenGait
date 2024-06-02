@@ -1,4 +1,3 @@
-
 import os
 import argparse
 import torch
@@ -57,35 +56,34 @@ def run_model(cfgs, training):
 
 
 # ---------------------Single gpu training/debugging--------------------------------------
-if __name__ == '__main__':
-    import torch.distributed as dist
-    import os
-    # os.environ['CUDA_VISIBLE_DEVICES'] = '1'
-    os.environ['MASTER_ADDR'] = 'localhost'
-    os.environ['MASTER_PORT'] = '5678'
-    dist.init_process_group(backend='nccl', init_method='env://', rank = 0, world_size = 1)
-    cfgs = config_loader(opt.cfgs)
-    if opt.iter != 0:
-        cfgs['evaluator_cfg']['restore_hint'] = int(opt.iter)
-        cfgs['trainer_cfg']['restore_hint'] = int(opt.iter)
-
-    training = (opt.phase == 'train')
-
-    initialization(cfgs, training)
-    run_model(cfgs, training)
-
-# -----------Multi-gpu card training, official original code--------------------------------------
-
 # if __name__ == '__main__':
-#     torch.distributed.init_process_group('nccl', init_method='env://')
-#     if torch.distributed.get_world_size() != torch.cuda.device_count():
-#         raise ValueError("Expect number of available GPUs({}) equals to the world size({}).".format(
-#             torch.cuda.device_count(), torch.distributed.get_world_size()))
+#     import torch.distributed as dist
+#     import os
+#     os.environ['MASTER_ADDR'] = 'localhost'
+#     os.environ['MASTER_PORT'] = '5678'
+#     dist.init_process_group(backend='nccl', init_method='env://', rank = 0, world_size = 1)
 #     cfgs = config_loader(opt.cfgs)
 #     if opt.iter != 0:
 #         cfgs['evaluator_cfg']['restore_hint'] = int(opt.iter)
 #         cfgs['trainer_cfg']['restore_hint'] = int(opt.iter)
 
 #     training = (opt.phase == 'train')
+
 #     initialization(cfgs, training)
 #     run_model(cfgs, training)
+
+# -----------Multi-gpu card training, official original code--------------------------------------
+
+if __name__ == '__main__':
+    torch.distributed.init_process_group('nccl', init_method='env://')
+    if torch.distributed.get_world_size() != torch.cuda.device_count():
+        raise ValueError("Expect number of available GPUs({}) equals to the world size({}).".format(
+            torch.cuda.device_count(), torch.distributed.get_world_size()))
+    cfgs = config_loader(opt.cfgs)
+    if opt.iter != 0:
+        cfgs['evaluator_cfg']['restore_hint'] = int(opt.iter)
+        cfgs['trainer_cfg']['restore_hint'] = int(opt.iter)
+
+    training = (opt.phase == 'train')
+    initialization(cfgs, training)
+    run_model(cfgs, training)

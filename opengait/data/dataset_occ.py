@@ -33,7 +33,7 @@ class OcclusionDataSet(tordata.Dataset):
         return len(self.seqs_info)
 
     def __loader__(self, paths):
-        paths = sorted(paths)
+        # paths = sorted(paths)
         data_list = []
         for pth in paths:
             if pth.endswith('.pkl'):
@@ -45,10 +45,11 @@ class OcclusionDataSet(tordata.Dataset):
             data_list.append(_)
         for idx, data in enumerate(data_list):
             if len(data) != len(data_list[0]):
-                print(paths)
-                print(len(data),' and ',len(data_list[0]))
-                raise ValueError(
-                    'Each input data({}) should have the same length.'.format(paths[idx]))
+                # print(paths,':use origin sil')
+                # print(len(data),' and ',len(data_list[0]))
+                return [data_list[0],data_list[0]]
+                # raise ValueError(
+                #     'Each input data({}) should have the same length.'.format(paths[idx]))
             if len(data) == 0:
                 raise ValueError(
                     'Each input data({}) should have at least one element.'.format(paths[idx]))
@@ -116,7 +117,7 @@ class OcclusionDataSet(tordata.Dataset):
                         if seq_dirs != []:
                             seq_dirs = [osp.join(seq_path, dir)
                                         for dir in seq_dirs]
-                            seq_dirs.append(seq_dirs[0].replace('silhouettes_seg_cut_pkl','silhouettes_seg_occ_cut_pkl'))
+                            seq_dirs.append(seq_dirs[0].replace('Silhouette_pkl','Silhouette_occ_pkl'))
                             if data_in_use is not None:
                                 seq_dirs = [dir for dir, use_bl in zip(
                                     seq_dirs, data_in_use) if use_bl]

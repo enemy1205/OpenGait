@@ -1,0 +1,2 @@
+# python datasets/OUMVLP/rearrange_OUMVLP.py --input_path /home/sp/datasets/OUMVLP/OUMVLP_Silhouette_OCC/occ_cut --output_path /home/sp/datasets/OUMVLP/OUMVLP_Silhouette_occ_rearranged
+python datasets/pretreatment.py --input_path /home/sp/datasets/OUMVLP/OUMVLP_Silhouette_rearranged --output_path /home/sp/datasets/OUMVLP/OUMVLP_Silhouette_rearranged_pkl
