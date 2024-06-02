@@ -3,15 +3,15 @@ data_cfg:
   dataset_root: your_path
   dataset_partition: ./datasets/SUSTech1K/SUSTech1K.json
   num_workers: 4
-  data_in_use: [false, false, false, false, false, false, true, false, false, false, false, false, false, false, false, false]
+  data_in_use: [True, False] # heatmap, sil
   remove_no_gallery: false # Remove probe if no gallery for it
   test_dataset_name: SUSTech1K
 
 evaluator_cfg:
   enable_float16: true
   restore_ckpt_strict: true
-  restore_hint: 60000
-  save_name: SwinGait3D_B1122_C2
+  restore_hint: 50000
+  save_name: SkeletonGait
   eval_func: evaluate_indoor_dataset #evaluate_Gait3D
   sampler:
     batch_shuffle: false
@@ -34,34 +34,35 @@ loss_cfg:
     log_accuracy: true
 
 model_cfg:
-  model: SwinGait
+  model: DeepGaitV2
   Backbone:
+    in_channels: 2
     mode: p3d
-    in_channels: 1
     layers:
       - 1
       - 1
-      - 2
-      - 2
+      - 1
+      - 1
     channels:
       - 64
       - 128
-  bin_num: 
-    - 15
+      - 256
+      - 512
   SeparateBNNecks:
-    in_channels: 256
     class_num: 250
-    parts_num: 16
 
 optimizer_cfg:
-  lr: 0.0003
-  solver: AdamW
-  weight_decay: 0.02
+  lr: 0.1
+  momentum: 0.9
+  solver: SGD
+  weight_decay: 0.0005
 
 scheduler_cfg:
   gamma: 0.1
   milestones: # Learning Rate Reduction at each milestones
-    - 100000000
+    - 20000
+    - 30000
+    - 40000
   scheduler: MultiStepLR
 
 trainer_cfg:
@@ -69,22 +70,19 @@ trainer_cfg:
   fix_BN: false
   with_test: true #true
   log_iter: 100
-  optimizer_reset: True
-  restore_ckpt_strict: false
-  restore_hint: ./output/SUSTech1K/DeepGaitV2/DeepGaitV2_B1111_C2_P3D/checkpoints/DeepGaitV2_B1111_C2_P3D-50000.pt
+  restore_ckpt_strict: true
+  restore_hint: 0
   save_iter: 10000
-  save_name: SwinGait3D_B1122_C2
+  save_name: SkeletonGait
   sync_BN: true
-  T_max_iter: 50000
-  total_iter: 60000
+  total_iter: 50000
   sampler:
     batch_shuffle: true
     batch_size:
       - 8 # TripletSampler, batch_size[0] indicates Number of Identity
       - 8 #                 batch_size[1] indicates Samples sequqnce for each Identity
-    frames_num_fixed: 30 # fixed frames number for training
-    frames_skip_num: 4
-    sample_type: fixed_ordered # # fixed control input frames number, unordered for controlling order of input tensor; Other options: unfixed_ordered or all_ordered
+    frames_num_fixed: 10 # fixed frames number for training
+    sample_type: fixed_unordered # fixed control input frames number, unordered for controlling order of input tensor; Other options: unfixed_ordered or all_ordered
     type: TripletSampler
   transform:
     - type: Compose
@@ -96,4 +94,3 @@ trainer_cfg:
           prob: 0.2
         - type: RandomRotate
           prob: 0.2
-
