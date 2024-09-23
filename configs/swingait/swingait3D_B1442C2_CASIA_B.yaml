@@ -1,16 +1,17 @@
 data_cfg:
-  dataset_name: OUMVLP
-  dataset_root: /home/sp/datasets/OUMVLP/OUMVLP_Silhouette_occ_pkl
-  dataset_partition: ./datasets/OUMVLP/OUMVLP.json
-  num_workers: 8
+  dataset_name: CASIA-B
+  dataset_root: /home/sp/datasets/CASIA_B/silhouettes_seg_cut_pkl
+  dataset_partition: ./datasets/CASIA-B/CASIA-B.json
+  num_workers: 12
   remove_no_gallery: false # Remove probe if no gallery for it
-  test_dataset_name: OUMVLP
+  test_dataset_name: CASIA-B
+
 
 evaluator_cfg:
   enable_float16: true
   restore_ckpt_strict: true
-  restore_hint: 210000
-  save_name: DeepGaitV2
+  restore_hint: 80000
+  save_name: SwinGait3D_B1442_C2
   sampler:
     batch_shuffle: false
     batch_size: 16
@@ -18,7 +19,8 @@ evaluator_cfg:
     frames_all_limit: 720 # limit the number of sampled frames to prevent out of memory
   metric: euc # cos
   transform:
-    - type: BaseSilCuttingTransform
+    - type: BaseSilTransform
+    # - type: BaseSilTransform
 
 loss_cfg:
   - loss_term_weight: 1.0
@@ -30,55 +32,57 @@ loss_cfg:
     type: CrossEntropyLoss
     log_prefix: softmax
     log_accuracy: true
+    
 
 model_cfg:
-  model: DeepGaitV2
+  model: SwinGait
   Backbone:
-    in_channels: 1
     mode: p3d
-    layers: 
+    in_channels: 1
+    layers:
       - 1
-      - 1
-      - 1
-      - 1
-    channels: 
+      - 4
+      - 4
+      - 2
+    channels:
       - 64
       - 128
-      - 256
-      - 512
+  bin_num: 
+    - 15
   SeparateBNNecks:
-    class_num: 5153
+    in_channels: 256
+    class_num: 3000
+    parts_num: 16
 
 optimizer_cfg:
-  lr: 0.1
-  momentum: 0.9
-  solver: SGD
-  weight_decay: 0.0005
+  lr: 0.0003
+  solver: AdamW
+  weight_decay: 0.02
 
 scheduler_cfg:
   gamma: 0.1
   milestones: # Learning Rate Reduction at each milestones
-    - 60000
-    - 80000
-    - 100000
+    - 100000000
   scheduler: MultiStepLR
 
 trainer_cfg:
   enable_float16: true # half_percesion float for memory reduction and speedup
   fix_BN: false
   log_iter: 100
-  with_test: false
-  restore_ckpt_strict: true
-  restore_hint: 120000
-  save_iter: 30000
-  save_name: DeepGaitV2
+  with_test: True
+  optimizer_reset: True
+  restore_ckpt_strict: false
+  restore_hint: 0
+  save_iter: 20000
+  save_name: SwinGait3D_TEST
   sync_BN: true
-  total_iter: 210000
+  T_max_iter: 60000
+  total_iter: 80000
   sampler:
     batch_shuffle: true
     batch_size:
-      - 16 # TripletSampler, batch_size[0] indicates Number of Identity
-      - 8 #                 batch_size[1] indicates Samples sequqnce for each Identity
+      - 4 # TripletSampler, batch_size[0] indicates Number of Identity
+      - 4 #                 batch_size[1] indicates Samples sequqnce for each Identity
     frames_num_fixed: 30 # fixed frames number for training
     frames_skip_num: 4
     sample_type: fixed_ordered # fixed control input frames number, unordered for controlling order of input tensor; Other options: unfixed_ordered or all_ordered
@@ -88,8 +92,19 @@ trainer_cfg:
       trf_cfg:
         - type: RandomPerspective
           prob: 0.2
-        - type: BaseSilCuttingTransform
+        - type: BaseSilTransform
         - type: RandomHorizontalFlip
           prob: 0.2
         - type: RandomRotate
           prob: 0.2
+    # - type: Compose
+    #   trf_cfg:
+    #     - type: RandomPerspective
+    #       prob: 0.2
+    #     - type: BaseSilTransform
+    #     - type: RandomHorizontalFlip
+    #       prob: 0.2
+    #     - type: RandomRotate
+    #       prob: 0.2
+
+

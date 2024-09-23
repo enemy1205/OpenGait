@@ -215,8 +215,8 @@ class BaseModel(MetaModel, nn.Module):
 
     def get_loader(self, data_cfg, train=True):
         sampler_cfg = self.cfgs['trainer_cfg']['sampler'] if train else self.cfgs['evaluator_cfg']['sampler']
-        dataset = DataSet(data_cfg, train)
-        # dataset = OcclusionDataSet(data_cfg, train)
+        # dataset = DataSet(data_cfg, train)
+        dataset = OcclusionDataSet(data_cfg, train)
         Sampler = get_attr_from([Samplers], sampler_cfg['type'])
         vaild_args = get_valid_args(Sampler, sampler_cfg, free_keys=[
             'sample_type', 'type'])
@@ -453,9 +453,9 @@ class BaseModel(MetaModel, nn.Module):
     def run_test(model):
         """Accept the instance object(model) here, and then run the test loop."""
         evaluator_cfg = model.cfgs['evaluator_cfg']
-        if torch.distributed.get_world_size() != evaluator_cfg['sampler']['batch_size']:
-            raise ValueError("The batch size ({}) must be equal to the number of GPUs ({}) in testing mode!".format(
-                evaluator_cfg['sampler']['batch_size'], torch.distributed.get_world_size()))
+        # if torch.distributed.get_world_size() != evaluator_cfg['sampler']['batch_size']:
+        #     raise ValueError("The batch size ({}) must be equal to the number of GPUs ({}) in testing mode!".format(
+        #         evaluator_cfg['sampler']['batch_size'], torch.distributed.get_world_size()))
         rank = torch.distributed.get_rank()
         with torch.no_grad():
             info_dict = model.inference(rank)

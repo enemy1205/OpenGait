@@ -2,7 +2,7 @@
 # # Baseline
 # CUDA_VISIBLE_DEVICES=0 python opengait/main_re.py --cfgs configs/deepgaitv2/DeepGaitV2_oumvlp.yaml --phase test
 # CUDA_VISIBLE_DEVICES=1,2 torchrun --nproc_per_node=2 opengait/main.py --cfgs configs/deepgaitv2/DeepGaitV2_gait3d_hid.yaml --phase test
-CUDA_VISIBLE_DEVICES=0 python opengait/main_r.py --cfgs ./configs/gaitrec/e2e_rec_fformer_dpv2_oumvlp_hpp_add.yaml --phase test
+CUDA_VISIBLE_DEVICES=0 python opengait/main_single2.py --cfgs configs/deepgaitv2/DeepGaitV2_oumvlp.yaml --phase test
 # # GaitSet
 # CUDA_VISIBLE_DEVICES=0,1 python -m torch.distributed.launch --nproc_per_node=2 opengait/main.py --cfgs ./configs/gaitset/gaitset.yaml --phase test
 

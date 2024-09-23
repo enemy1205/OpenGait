@@ -1,14 +1,16 @@
 import torch.optim as optim
 import os.path as osp
 from ..base_model import BaseModel
-from .deepgaitv2 import DeepGaitV2_NO_Base_V2
+from .deepgaitv2 import DeepGaitV2_NO_Base
 from ..backbones.fuse_former import InpaintGenerator,Discriminator
 from utils import get_valid_args, get_attr_from
 import numpy as np
 
 
 class FFormer_Rec(BaseModel):
-    
+    ###
+    #  单一的步态补全网络
+    ### 
     def build_network(self, model_cfg):
         self.netGen = InpaintGenerator(model_cfg['Gen'])
         self.netDis = Discriminator(model_cfg['Dis'],use_sigmoid=True)
@@ -72,9 +74,11 @@ class FFormer_Rec(BaseModel):
     
     
 class FFormer_E2E_Sopt(BaseModel):
-    
+    ###
+    # 端到端的步态识别，直接拼接，单优化器
+    ###
     def build_network(self, model_cfg):
-        self.netGait = DeepGaitV2_NO_Base_V2(model_cfg['Gait'])
+        self.netGait = DeepGaitV2_NO_Base(model_cfg['Gait'])
         self.netGen = InpaintGenerator(model_cfg['Gen'])
         self.netDis = Discriminator(model_cfg['Dis'],use_sigmoid=True)
         self.dis_lr = model_cfg['lr_D']
@@ -104,6 +108,12 @@ class FFormer_E2E_Sopt(BaseModel):
 
 
     def forward(self, inputs):
+        if self.training:
+            if self.iteration >= 1000:
+                self.netGen.eval()
+                self.netGen.requires_grad_(False)
+                self.netDis.eval()
+                self.netDis.requires_grad_(False)
         ipts, labs, _, _, seqL = inputs
         # ipts[0 or 1] : [b,t,h,w]
         gt_sils = ipts[0].unsqueeze(2)
@@ -135,7 +145,7 @@ class FFormer_E2E_Sopt(BaseModel):
                 # 'pred': recovered_sils.view(b*t, c, h, w)
             }
         }
-        retval_gait = self.netGait([[recovered_sils.view(b,t, h, w)], labs, None, None, seqL],enc_feat)
+        retval_gait = self.netGait([[recovered_sils.view(b,t, h, w)], labs, None, None, seqL])
         retval['training_feat']['triplet'] = retval_gait['training_feat']['triplet']
         retval['training_feat']['softmax'] = retval_gait['training_feat']['softmax']
         retval['inference_feat']['embeddings'] = retval_gait['inference_feat']['embeddings']

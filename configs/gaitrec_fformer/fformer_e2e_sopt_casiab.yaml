@@ -8,7 +8,7 @@ data_cfg:
 evaluator_cfg:
   enable_float16: true
   restore_ckpt_strict: true
-  restore_hint: 60000
+  restore_hint: 0
   save_name: Phase_Rec
   eval_func: evaluate_gait_rec
   sampler:
@@ -82,11 +82,23 @@ optimizer_cfg:
     - 0.99
   solver: Adam
   weight_decay: 0.0005
+
+# optimizer_cfg:
+#   lr: 0.1
+#   momentum: 0.9
+#   solver: SGD
+#   weight_decay: 0.0005
+
 scheduler_cfg:
   gamma: 0.1
   milestones: # Learning Rate Reduction at each milestones
+  # adam
     - 25000
     - 50000
+# sgd
+    # - 20000
+    # - 40000
+    # - 50000
   scheduler: MultiStepLR
 trainer_cfg:
   enable_float16: true # half_percesion float for memory reduction and speedup

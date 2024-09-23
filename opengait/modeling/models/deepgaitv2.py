@@ -439,18 +439,11 @@ class DeepGaitV2_NO_Base(nn.Module):
         self.layer3 = self.make_layer(block, channels[2], strides[2], blocks_num=layers[2], mode=mode)
         self.layer4 = self.make_layer(block, channels[3], strides[3], blocks_num=layers[3], mode=mode)
 
-        self.fea_map = nn.Sequential(
-            conv1x1(128, channels[3]), 
-            nn.BatchNorm2d(self.inplanes), 
-            nn.ReLU(inplace=True)
-        )
-
         if mode == '2d': 
             self.layer2 = SetBlockWrapper(self.layer2)
             self.layer3 = SetBlockWrapper(self.layer3)
             self.layer4 = SetBlockWrapper(self.layer4)
 
-        # self.FCs = SeparateFCs(16, channels[3]+128, channels[2])
         self.FCs = SeparateFCs(16, channels[3], channels[2])
         self.BNNecks = SeparateBNNecks(16, channels[2], class_num=model_cfg['SeparateBNNecks']['class_num'])
 
@@ -480,75 +473,33 @@ class DeepGaitV2_NO_Base(nn.Module):
             )
         return nn.Sequential(*layers)
 
-    def forward(self, inputs,enc_feat):
-        ipts, labs, typs, vies, seqL = inputs
-
-        sils = ipts[0].unsqueeze(1)
-        
-        n, c, s, h, w = sils.size()
-        
-        assert sils.size(-1) in [44, 88]
-
-        del ipts
-        
-        
-        out0 = self.layer0(sils) # [b,64,t,h,w]
-        out1 = self.layer1(out0) # [b,64,t,h,w]
-        out2 = self.layer2(out1) # [b,128,t,h/2,w/2]
-        out3 = self.layer3(out2) # [b,256,t,h/2,w/2]
-        out4 = self.layer4(out3) # [b,512,t,h/4,w/4]
-        
-        enc_feat = self.fea_map(enc_feat)
-        
-        output_size = enc_feat.size()
-        
-        enc_feat = enc_feat.reshape(n, s, *output_size[1:]).transpose(1, 2).contiguous()
-        
-        
-        out4 = torch.add(out4,enc_feat)
-        
-        # Temporal Pooling, TP
-        outs = self.TP(out4, seqL, options={"dim": 2})[0]  # [n, c, h, w]
-
-        
-        # Horizontal Pooling Matching, HPM
-        feat = self.HPP(outs)  # [n, c, p]
-
-        
-        embed_1 = self.FCs(feat)  # [n, c, p]
-        embed_2, logits = self.BNNecks(embed_1)  # [n, c, p] , [n, class_num, p]
-
-        embed = embed_1
-
-        retval = {
-            'training_feat': {
-                'triplet': {'embeddings': embed_1, 'labels': labs},
-                'softmax': {'logits': logits, 'labels': labs}
-            },
-            'visual_summary': {
-                'image/sils': rearrange(sils, 'n c s h w -> (n s) c h w'),
-            },
-            'inference_feat': {
-                'embeddings': embed
-            }
-        }
-
-        return retval
-    
-    
-    # def forward(self, inputs):
+    # def forward(self, inputs,enc_feat):
     #     ipts, labs, typs, vies, seqL = inputs
 
     #     sils = ipts[0].unsqueeze(1)
         
-    #     # assert sils.size(-1) in [44, 88]
+    #     n, c, s, h, w = sils.size()
+        
+    #     assert sils.size(-1) in [44, 88]
 
     #     del ipts
+        
+        
     #     out0 = self.layer0(sils) # [b,64,t,h,w]
     #     out1 = self.layer1(out0) # [b,64,t,h,w]
     #     out2 = self.layer2(out1) # [b,128,t,h/2,w/2]
     #     out3 = self.layer3(out2) # [b,256,t,h/2,w/2]
-    #     out4 = self.layer4(out3) # [b,512,t,h/4,w/4]        
+    #     out4 = self.layer4(out3) # [b,512,t,h/4,w/4]
+        
+    #     enc_feat = self.fea_map(enc_feat)
+        
+    #     output_size = enc_feat.size()
+        
+    #     enc_feat = enc_feat.reshape(n, s, *output_size[1:]).transpose(1, 2).contiguous()
+        
+        
+    #     out4 = torch.add(out4,enc_feat)
+        
     #     # Temporal Pooling, TP
     #     outs = self.TP(out4, seqL, options={"dim": 2})[0]  # [n, c, h, w]
 
@@ -576,6 +527,48 @@ class DeepGaitV2_NO_Base(nn.Module):
     #     }
 
     #     return retval
+    
+    
+    def forward(self, inputs):
+        ipts, labs, typs, vies, seqL = inputs
+
+        sils = ipts[0].unsqueeze(1)
+        
+        # assert sils.size(-1) in [44, 88]
+
+        del ipts
+        out0 = self.layer0(sils) # [b,64,t,h,w]
+        out1 = self.layer1(out0) # [b,64,t,h,w]
+        out2 = self.layer2(out1) # [b,128,t,h/2,w/2]
+        out3 = self.layer3(out2) # [b,256,t,h/2,w/2]
+        out4 = self.layer4(out3) # [b,512,t,h/4,w/4]        
+        # Temporal Pooling, TP
+        outs = self.TP(out4, seqL, options={"dim": 2})[0]  # [n, c, h, w]
+
+        
+        # Horizontal Pooling Matching, HPM
+        feat = self.HPP(outs)  # [n, c, p]
+
+        
+        embed_1 = self.FCs(feat)  # [n, c, p]
+        embed_2, logits = self.BNNecks(embed_1)  # [n, c, p] , [n, class_num, p]
+
+        embed = embed_1
+
+        retval = {
+            'training_feat': {
+                'triplet': {'embeddings': embed_1, 'labels': labs},
+                'softmax': {'logits': logits, 'labels': labs}
+            },
+            'visual_summary': {
+                'image/sils': rearrange(sils, 'n c s h w -> (n s) c h w'),
+            },
+            'inference_feat': {
+                'embeddings': embed
+            }
+        }
+
+        return retval
 
 class SimVP(nn.Module):
     def __init__(self, model_cfg):

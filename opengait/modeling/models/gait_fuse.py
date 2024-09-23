@@ -14,7 +14,7 @@ blocks_map = {
 }
 
 class OrinFuseGait(BaseModel):
-    
+    # 此模型不使用fformer中的encoder，使用dpv2中的卷积层作为encoder
     def build_network(self, model_cfg):
         mode = model_cfg['Backbone']['mode']
         assert mode in blocks_map.keys()
@@ -55,11 +55,11 @@ class OrinFuseGait(BaseModel):
             self.layer3 = SetBlockWrapper(self.layer3)
             self.layer4 = SetBlockWrapper(self.layer4)
 
-        self.fea_map = nn.Sequential(
-            conv1x1(256, channels[3]), 
-            nn.BatchNorm2d(channels[3]), 
-            nn.ReLU(inplace=True)
-        )
+        # self.fea_map = nn.Sequential(
+        #     conv1x1(256, channels[3]), 
+        #     nn.BatchNorm2d(channels[3]), 
+        #     nn.ReLU(inplace=True)
+        # )
 
         self.FCs = SeparateFCs(16, channels[3], channels[2])
         self.BNNecks = SeparateBNNecks(16, channels[2], class_num=model_cfg['SeparateBNNecks']['class_num'])
@@ -91,7 +91,7 @@ class OrinFuseGait(BaseModel):
         self.add_pos_emb = AddPosEmb(n_vecs, hidden)
         self.sc = SoftComp(channel // 2, hidden, output_size, kernel_size, stride, padding)
 
-        self.encoder = Encoder()
+        # self.encoder = Encoder()
         
     def make_layer(self, block, planes, stride, blocks_num, mode='2d'):
 
@@ -116,7 +116,69 @@ class OrinFuseGait(BaseModel):
             )
         return nn.Sequential(*layers)
 
+    # def forward(self, inputs):
+    #     ipts, labs, typs, vies, seqL = inputs
+
+    #     sils = ipts[0].unsqueeze(1)
+        
+    #     n, c, s, h, w = sils.size()
+        
+    #     assert sils.size(-1) in [44, 88]
+
+    #     del ipts        
+        
+    #     out0 = self.layer0(sils) # [b,64,t,h,w]
+    #     out1 = self.layer1(out0) # [b,64,t,h,w]
+    #     out2 = self.layer2(out1) # [b,128,t,h/2,w/2]
+    #     out3 = self.layer3(out2) # [b,256,t,h/2,w/2]
+    #     out4 = self.layer4(out3) # [b,512,t,h/4,w/4]        
+        
+    #     enc_feat = self.encoder(rearrange(sils, 'n c s h w -> n s c h w').view(n * s, c, h, w)) # [t,128,h/4,w/4]
+        
+    #     trans_feat = self.ss(enc_feat, n) #[b,1050,512]
+    #     trans_feat = self.add_pos_emb(trans_feat) #[b,1050,512]
+    #     trans_feat = self.transformer(trans_feat) #[b,1050,512]
+    #     trans_feat = self.sc(trans_feat, s) #[t*b,256,h/4,w/4]
+        
+    #     enc_feat = self.fea_map(enc_feat+trans_feat)
+        
+    #     output_size = enc_feat.size()
+        
+    #     enc_feat = enc_feat.reshape(n, s, *output_size[1:]).transpose(1, 2).contiguous()
+                
+    #     # Temporal Pooling, TP
+    #     outs_1 = self.TP(out4, seqL, options={"dim": 2})[0]  # [n, c, h, w]
+        
+    #     outs_2 = self.TP(enc_feat, seqL, options={"dim": 2})[0]  # [n, c, h, w]
+
+        
+    #     # Horizontal Pooling Matching, HPM
+    #     feat_1 = self.HPP(outs_1)  # [n, c, p]
+    #     feat_2 = self.HPP(outs_2)  # [n, c, p]
+        
+    #     embed_1 = self.FCs(torch.add(feat_1,feat_2))  # [n, c, p]
+    #     # embed_1 = self.FCs(feat_2)  # [n, c, p]
+    #     embed_2, logits = self.BNNecks(embed_1)  # [n, c, p] , [n, class_num, p]
+
+    #     embed = embed_1
+
+    #     retval = {
+    #         'training_feat': {
+    #             'triplet': {'embeddings': embed_1, 'labels': labs},
+    #             'softmax': {'logits': logits, 'labels': labs}
+    #         },
+    #         'visual_summary': {
+    #             'image/sils': rearrange(sils, 'n c s h w -> (n s) c h w'),
+    #         },
+    #         'inference_feat': {
+    #             'embeddings': embed
+    #         }
+    #     }
+
+    #     return retval
+    
     def forward(self, inputs):
+        # 不使用 encoder fea_map
         ipts, labs, typs, vies, seqL = inputs
 
         sils = ipts[0].unsqueeze(1)
@@ -133,31 +195,31 @@ class OrinFuseGait(BaseModel):
         out3 = self.layer3(out2) # [b,256,t,h/2,w/2]
         out4 = self.layer4(out3) # [b,512,t,h/4,w/4]        
         
-        enc_feat = self.encoder(rearrange(sils, 'n c s h w -> n s c h w').view(n * s, c, h, w)) # [t,128,h/4,w/4]
+        enc_feat = rearrange(out4, 'n c s h w -> (n s) c h w') # [b*t,512,h/4,w/4]
         
         trans_feat = self.ss(enc_feat, n) #[b,1050,512]
         trans_feat = self.add_pos_emb(trans_feat) #[b,1050,512]
         trans_feat = self.transformer(trans_feat) #[b,1050,512]
-        trans_feat = self.sc(trans_feat, s) #[t*b,256,h/4,w/4]
+        trans_feat = self.sc(trans_feat, s) #[t*b,512,h/4,w/4]
         
-        enc_feat = self.fea_map(enc_feat+trans_feat)
+        enc_feat = enc_feat+trans_feat
         
         output_size = enc_feat.size()
         
         enc_feat = enc_feat.reshape(n, s, *output_size[1:]).transpose(1, 2).contiguous()
                 
         # Temporal Pooling, TP
-        outs_1 = self.TP(out4, seqL, options={"dim": 2})[0]  # [n, c, h, w]
+        # outs_1 = self.TP(out4, seqL, options={"dim": 2})[0]  # [n, c, h, w]
         
         outs_2 = self.TP(enc_feat, seqL, options={"dim": 2})[0]  # [n, c, h, w]
 
         
         # Horizontal Pooling Matching, HPM
-        feat_1 = self.HPP(outs_1)  # [n, c, p]
+        # feat_1 = self.HPP(outs_1)  # [n, c, p]
         feat_2 = self.HPP(outs_2)  # [n, c, p]
         
-        embed_1 = self.FCs(torch.add(feat_1,feat_2))  # [n, c, p]
-        # embed_1 = self.FCs(feat_2)  # [n, c, p]
+        # embed_1 = self.FCs(torch.add(feat_1,feat_2))  # [n, c, p]
+        embed_1 = self.FCs(feat_2)  # [n, c, p]
         embed_2, logits = self.BNNecks(embed_1)  # [n, c, p] , [n, class_num, p]
 
         embed = embed_1

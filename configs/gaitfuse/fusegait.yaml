@@ -1,0 +1,118 @@
+data_cfg:
+  dataset_name: Gait3D
+  dataset_root: /home/sp/datasets/Gait3D/2D_Silhouettes_64x64_pkl
+  dataset_partition: ./datasets/Gait3D/Gait3D.json
+  num_workers: 8
+  remove_no_gallery: false # Remove probe if no gallery for it
+  test_dataset_name: Gait3D
+
+evaluator_cfg:
+  enable_float16: true
+  restore_ckpt_strict: true
+  restore_hint: 0
+  save_name: FuseGait_Gait3D_TTTTT
+  eval_func: evaluate_Gait3D
+  metric: euc # cos
+  sampler:
+    batch_shuffle: false
+    batch_size: 1
+    sample_type: all_ordered
+    frames_all_limit: 720
+  transform:
+    - type: BaseSilCuttingTransform
+
+loss_cfg:
+  - loss_term_weight: 1
+    margin: 0.2
+    type: TripletLoss
+    log_prefix: triplet
+  - loss_term_weight: 1.0
+    scale: 16
+    type: CrossEntropyLoss
+    log_prefix: softmax
+    log_accuracy: true
+
+model_cfg:
+  model: FuseGait
+  Backbone:
+    mode: p3d
+    in_channels: 1
+    layers:
+      - 1
+      - 4
+      - 4
+      - 1
+    channels: 
+      - 64
+      - 128 
+      - 256
+      - 512
+  SeparateBNNecks:
+    class_num: 3000
+  Gen:
+    channel: 256  #normal encoder
+    # channel: 512 # slim encoder
+    hidden: 512
+    stack_num: 2
+    num_head: 2
+    dropout: 0.
+    kernel_size:
+      - 3
+      - 3
+    padding:
+      - 3
+      - 3
+    stride:
+      - 3
+      - 3
+    output_size:
+      - 16
+      - 11
+
+optimizer_cfg:
+  lr: 0.0003
+  betas:
+    - 0
+    - 0.99
+  solver: Adam
+  weight_decay: 0.0005
+
+scheduler_cfg:
+  gamma: 0.1
+  milestones: # Learning Rate Reduction at each milestones
+    - 60000
+    - 80000
+    - 100000
+  scheduler: MultiStepLR
+
+trainer_cfg:
+  enable_float16: true # half_percesion float for memory reduction and speedup
+  with_test: true
+  log_iter: 100
+  restore_ckpt_strict: false
+  restore_hint: 0
+  sync_BN: true
+  save_iter: 10000
+  save_name: FuseGait_Gait3D_TTTTT
+  total_iter: 60000
+  sampler:
+    batch_shuffle: false
+    batch_size:
+      - 8 # TripletSampler, batch_size[0] indicates Number of Identity
+      - 4 #                 batch_size[1] indicates Samples sequqnce for each Identity
+    # frames_num_fixed: 30
+    # frames_skip_num: 0
+    frames_num_fixed: 30 # fixed frames number for training
+    frames_num_max: 40 # max frames number for unfixed training
+    frames_num_min: 20 # min frames number for unfixed traing
+    sample_type: fixed_ordered
+    frames_skip_num: 4
+    type: TripletSampler
+  transform:
+    - type: Compose
+      trf_cfg:
+        - type: RandomPerspective
+          prob: 0.2
+        - type: BaseSilCuttingTransform
+        - type: RandomHorizontalFlip
+          prob: 0.2 

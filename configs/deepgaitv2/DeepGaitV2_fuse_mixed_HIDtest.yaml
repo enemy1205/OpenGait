@@ -1,22 +1,22 @@
 data_cfg:
-  dataset_name: OUMVLP
-  dataset_root: /home/sp/datasets/OUMVLP/OUMVLP_Silhouette_occ_pkl
-  dataset_partition: ./datasets/OUMVLP/OUMVLP.json
-  num_workers: 8
+  dataset_name: MIXED
+  dataset_root: /home/lxc/dataset/HID2024/HID_2024
+  dataset_partition: ./datasets/HID/HID2023.json
+  num_workers: 36
   remove_no_gallery: false # Remove probe if no gallery for it
-  test_dataset_name: OUMVLP
+  test_dataset_name: HID
 
 evaluator_cfg:
   enable_float16: true
   restore_ckpt_strict: true
-  restore_hint: 210000
-  save_name: DeepGaitV2
+  restore_hint: 90000
+  save_name: FuseGait_MIXED_22
   sampler:
     batch_shuffle: false
-    batch_size: 16
+    batch_size: 8
     sample_type: all_ordered # all indicates whole sequence used to test, while ordered means input sequence by its natural order; Other options:   fixed_unordered
     frames_all_limit: 720 # limit the number of sampled frames to prevent out of memory
-  metric: euc # cos
+  eval_func: HID_submission
   transform:
     - type: BaseSilCuttingTransform
 
@@ -32,22 +32,41 @@ loss_cfg:
     log_accuracy: true
 
 model_cfg:
-  model: DeepGaitV2
+  model: FuseGait
   Backbone:
-    in_channels: 1
     mode: p3d
-    layers: 
+    in_channels: 1
+    layers:
       - 1
+      - 4
+      - 4
       - 1
-      - 1
-      - 1
-    channels: 
+    channels:
       - 64
       - 128
       - 256
       - 512
   SeparateBNNecks:
-    class_num: 5153
+    class_num: 5879
+  Gen:
+    channel: 256  #normal encoder
+    # channel: 512 # slim encoder
+    hidden: 512
+    stack_num: 2
+    num_head: 2
+    dropout: 0.
+    kernel_size:
+      - 3
+      - 3
+    padding:
+      - 3
+      - 3
+    stride:
+      - 3
+      - 3
+    output_size:
+      - 16
+      - 11
 
 optimizer_cfg:
   lr: 0.1
@@ -58,26 +77,26 @@ optimizer_cfg:
 scheduler_cfg:
   gamma: 0.1
   milestones: # Learning Rate Reduction at each milestones
-    - 60000
     - 80000
-    - 100000
+    - 140000
+    - 180000
   scheduler: MultiStepLR
 
 trainer_cfg:
   enable_float16: true # half_percesion float for memory reduction and speedup
   fix_BN: false
+  with_test: false #true
   log_iter: 100
-  with_test: false
   restore_ckpt_strict: true
-  restore_hint: 120000
+  restore_hint: 0
   save_iter: 30000
-  save_name: DeepGaitV2
+  save_name: FuseGait_MIXED_22
   sync_BN: true
   total_iter: 210000
   sampler:
     batch_shuffle: true
     batch_size:
-      - 16 # TripletSampler, batch_size[0] indicates Number of Identity
+      - 8 # TripletSampler, batch_size[0] indicates Number of Identity
       - 8 #                 batch_size[1] indicates Samples sequqnce for each Identity
     frames_num_fixed: 30 # fixed frames number for training
     frames_skip_num: 4
@@ -92,4 +111,6 @@ trainer_cfg:
         - type: RandomHorizontalFlip
           prob: 0.2
         - type: RandomRotate
-          prob: 0.2
+          prob: 0.1
+        - type: RandomErasing
+          prob: 0.1
