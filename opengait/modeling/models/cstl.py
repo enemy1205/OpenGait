@@ -8,7 +8,7 @@ from einops import rearrange
 
 
 from ..modules import SetBlockWrapper
-from ..backbones.cstl_module import MSTE, ATA, SSFL 
+from ..backbones.cstl_module import MSTE, ATA, SSFL,SetBlock
 
 class BasicConv2d(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, **kwargs):
@@ -30,11 +30,10 @@ class CSTL(BaseModel):
         _channels = [32, 64, 128]
 
         # 2D Convolution
-        self.conv2d_1 = SetBlockWrapper(BasicConv2d(_in_channels, _channels[0], 3, padding=1))
-        self.conv2d_2 = SetBlockWrapper(BasicConv2d(_channels[0], _channels[1], 3, padding=1))
-        self.conv2d_3 = SetBlockWrapper(BasicConv2d(_channels[1], _channels[2], 3, padding=1))
-        self.conv2d_4 = SetBlockWrapper(BasicConv2d(_channels[2], _channels[2], 3, padding=1))
-        self.pooling = SetBlockWrapper(nn.MaxPool2d(2))
+        self.conv2d_1 = SetBlock(BasicConv2d(_in_channels, _channels[0], 3, padding=1))
+        self.conv2d_2 = SetBlock(BasicConv2d(_channels[0], _channels[1], 3, padding=1),True)
+        self.conv2d_3 = SetBlock(BasicConv2d(_channels[1], _channels[2], 3, padding=1))
+        self.conv2d_4 = SetBlock(BasicConv2d(_channels[2], _channels[2], 3, padding=1))
         # three modules
         self.multi_scale = MSTE(_channels[2], _channels[2], part_num)
         self.adaptive_aggregation = ATA(_channels[2], part_num, div)
@@ -58,18 +57,16 @@ class CSTL(BaseModel):
 
     def forward(self, inputs):
         ipts, labs, _, _, seqL = inputs
-        sils = ipts[0].unsqueeze(1)
+        sils = ipts[0].unsqueeze(2)
         del ipts
 
-        x = self.conv2d_1(sils) # [n,c,s,w,h]
+        x = self.conv2d_1(sils) # [n,s,c,w,h]
         x = self.conv2d_2(x)
-        x = self.pooling(x)
         x = self.conv2d_3(x)
-        x = self.conv2d_4(x) # [n,c,s,w/2,h/2]
+        x = self.conv2d_4(x) # [n,s,c,w/2,h/2]
+        x = x.max(-1)[0] + x.mean(-1)  # [n,s,c,w/2]
 
-        x = x.max(-1)[0] + x.mean(-1)  # [n,c,s,w/2]
-
-        x = x.permute(0, 2, 1, 3)
+        
         
         t_f, t_s, t_l = self.multi_scale(x)
 

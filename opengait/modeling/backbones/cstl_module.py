@@ -23,7 +23,22 @@ def conv3d_bn(in_planes, out_planes, kernel_size, **kwargs):
     return nn.Sequential(nn.Conv3d(in_planes, out_planes, kernel_size, **kwargs),
                             nn.BatchNorm1d(out_planes))
 
+class SetBlock(nn.Module):
+    def __init__(self, forward_block, pooling=False):
+        super(SetBlock, self).__init__()
+        self.forward_block = forward_block
+        self.pooling = pooling
+        if pooling:
+            self.pool2d = nn.MaxPool2d(2)
 
+    def forward(self, x):
+        n, s, c, h, w = x.size()
+        x = self.forward_block(x.view(-1, c, h, w))
+        if self.pooling:
+            x = self.pool2d(x)
+        _, c, h, w = x.size()
+        return x.view(n, s, c, h, w)
+    
 class MSTE(nn.Module):
     def __init__(self, in_planes, out_planes, part_num):
         super(MSTE, self).__init__()
