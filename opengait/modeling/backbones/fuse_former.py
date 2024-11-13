@@ -37,6 +37,7 @@ class Encoder(nn.Module):
             nn.Conv2d(640, 256, kernel_size=3, stride=1, padding=1, groups=8),
             nn.LeakyReLU(0.2, inplace=True),
             # 512 = 256(x0)+256(上层输出)
+            # nn.Conv2d(512, 128, kernel_size=3, stride=1, padding=1, groups=1),           
             nn.Conv2d(512, 256, kernel_size=3, stride=1, padding=1, groups=1),
             nn.LeakyReLU(0.2, inplace=True)
         ])
@@ -111,7 +112,7 @@ class InpaintGenerator(nn.Module):
         output = self.decoder(enc_feat)
         output = torch.tanh(output)
         return output,enc_feat
-        # return enc_feat
+        # return output
 
 
 class deconv(nn.Module):

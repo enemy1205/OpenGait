@@ -145,6 +145,7 @@ class BaseModel(MetaModel, nn.Module):
         self.cfgs = cfgs
         self.iteration = 0
         self.engine_cfg = cfgs['trainer_cfg'] if training else cfgs['evaluator_cfg']
+        self.training = training
         if self.engine_cfg is None:
             raise Exception("Initialize a model without -Engine-Cfgs-")
 

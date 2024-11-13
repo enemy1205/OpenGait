@@ -1,7 +1,10 @@
 import torch.optim as optim
 import torch.nn as nn
 import torch
+import os
+import os.path as osp
 import torch.nn.functional as F
+import cv2
 from ..base_model import BaseModel
 from ..backbones.fuse_former import deconv,Discriminator,TransformerBlock,SoftComp,SoftSplit,AddPosEmb,Encoder
 from ..modules import SetBlockWrapper, HorizontalPoolingPyramid, PackSequenceWrapper, SeparateFCs, SeparateBNNecks, conv1x1, conv3x3, BasicBlock2D, BasicBlockP3D, BasicBlock3D
@@ -59,7 +62,7 @@ class CatFusion(nn.Module):
             sil_feat: [n, c, s, h, w]
             map_feat: [n, c, s, h, w]
         '''
-        feats = torch.cat([sil_feat, map_feat])
+        feats = torch.cat([sil_feat, map_feat],1)
         retun = self.conv(feats)
         return retun
 
@@ -74,8 +77,8 @@ class PlusFusion(nn.Module):
         '''
         return sil_feat + map_feat
 
-    
-class FFormerGait(BaseModel):
+
+class FuseFFormerGait(BaseModel):
     
     def build_network(self, model_cfg):
         
@@ -125,10 +128,7 @@ class FFormerGait(BaseModel):
         self.TP = PackSequenceWrapper(torch.max)
         self.HPP = HorizontalPoolingPyramid(bin_num=[16])
         
-        # self.feature_transform = nn.Sequential(
-        # conv1x1( channels[2], channels[3]),
-        # nn.BatchNorm2d(channels[3]),
-        # nn.ReLU(inplace=True))
+        self.fusion = CatFusion(channels[2])
 
         ss_channel = model_cfg['ss_channel']
         ts_hidden = model_cfg['hidden']
@@ -165,6 +165,7 @@ class FFormerGait(BaseModel):
         )
 
         self.netDis = Discriminator(model_cfg['Dis'],use_sigmoid=True)
+        self.dis_lr = 0.0001
 
     def make_layer(self, block, planes, stride, blocks_num, mode='2d'):
 
@@ -189,50 +190,85 @@ class FFormerGait(BaseModel):
             )
         return nn.Sequential(*layers)
 
+    def finetune_parameters(self):
+        dis_tune_params = list()
+        others_params = list()
+        for name, p in self.named_parameters():
+            if not p.requires_grad:
+                continue
+            if 'dis' in name:
+                dis_tune_params.append(p)
+            else:
+                others_params.append(p)
+        return [{'params': dis_tune_params, 'lr': self.dis_lr},{'params': others_params}]
+
     def get_optimizer(self, optimizer_cfg):
         self.msg_mgr.log_info(optimizer_cfg)
         optimizer = get_attr_from([optim], optimizer_cfg['solver'])
         valid_arg = get_valid_args(optimizer, optimizer_cfg, ['solver'])
-        transformer_params = list(self.transformer.parameters()) + \
-                     list(self.ss.parameters()) + \
-                     list(self.add_pos_emb.parameters()) + \
-                     list(self.sc.parameters()) + \
-                     list(self.encoder.parameters()) + \
-                     list(self.decoder.parameters())
-        params_list = [
-            {'params': transformer_params, 'lr': optimizer_cfg['lr'], 'weight_decay':optimizer_cfg['weight_decay']}, 
-            {'params': self.netDis.parameters(),'lr': optimizer_cfg['lr'] *1 , 'weight_decay': optimizer_cfg['weight_decay']}, 
-            {'params': self.FCs.parameters(), 'lr': optimizer_cfg['lr'] * 1, 'weight_decay': optimizer_cfg['weight_decay']}, 
-            {'params': self.BNNecks.parameters(), 'lr': optimizer_cfg['lr']* 1, 'weight_decay': optimizer_cfg['weight_decay']}, 
-        ]
-        for i in range(5): 
-            if hasattr(self, 'layer%d'%i): 
-                params_list.append(
-                    {'params': getattr(self, 'layer%d'%i).parameters(), 'lr': optimizer_cfg['lr'], 'weight_decay': optimizer_cfg['weight_decay']}
-                )
-        optimizer = optimizer(params_list,**valid_arg)
+        optimizer = optimizer(self.finetune_parameters(), **valid_arg)
         return optimizer
-    # def finetune_parameters(self):
-    #     dis_tune_params = list()
-    #     others_params = list()
-    #     for name, p in self.named_parameters():
-    #         if not p.requires_grad:
-    #             continue
-    #         if 'dis' in name:
-    #             dis_tune_params.append(p)
-    #         else:
-    #             others_params.append(p)
-    #     return [{'params': dis_tune_params, 'lr': self.dis_lr},{'params': others_params}]
 
-    # def get_optimizer(self, optimizer_cfg):
-    #     self.msg_mgr.log_info(optimizer_cfg)
-    #     optimizer = get_attr_from([optim], optimizer_cfg['solver'])
-    #     valid_arg = get_valid_args(optimizer, optimizer_cfg, ['solver'])
-    #     optimizer = optimizer(self.finetune_parameters(), **valid_arg)
-    #     return optimizer
+    def visual_heatmap(self, input_tensor, sils):
+        # 使用热力图绘制时请将test bs设置为1
+        n, c, s, height, width = sils.size()
+        outputs = (input_tensor**2).sum(1)
+        # print(type(outputs))
+        outputs = outputs.squeeze()
+        
+        # print(outputs.size())
+        t, h, w = outputs.size()
+        outputs = outputs.view(t, h * w)
+        outputs = F.normalize(outputs, p=2, dim=1)
+        outputs = outputs.view(t, h, w)
+        IMAGENET_MEAN = [0.485, 0.456, 0.406]
+        IMAGENET_STD = [0.229, 0.224, 0.225]
+        images = list()
+        sils, outputs = sils.cpu(), outputs.cpu()
+        sils = sils.permute(0, 2, 1, 3, 4)
+        n, s, c, height, width = sils.size()
+        sils = sils.squeeze(dim=0)
+        for j in range(outputs.size(0)):
+            # img = sils[j, 0 , ...]
+            img = sils[j, ...]
+            img_mean = IMAGENET_MEAN
+            img_std = IMAGENET_STD
+            for t, m, s in zip(img, img_mean, img_std):
+                    t.mul_(s).add_(m).clamp_(0, 1)
+
+            img_np = np.uint8(np.floor(img.numpy() * 255))
+            # img_np = np.uint8(np.floor(img.numpy()))
+            img_np = img_np.transpose((1, 2, 0))# (c, h, w) -> (h, w, c)
+            new_img_np = np.zeros((64, 44, 3))  
+            new_img_np[:, :, :2] = img_np
+            new_img_np[:, :, 2] = img_np[:, :, 0]
+
+            am = outputs[j, ...].numpy()
+            am = cv2.resize(am, (width, height))
+            am = 255 * (am - np.min(am)) / (
+                np.max(am) - np.min(am) + 1e-12
+            )
+            am = np.uint8(np.floor(am))
+            am = cv2.applyColorMap(am, cv2.COLORMAP_JET)
+            # overlapped
+            overlapped = new_img_np*0.3 + am*0.7
+            # overlapped = am
+            # overlapped = new_img_np
+            overlapped[overlapped > 255] = 255
+            overlapped = overlapped.astype(np.uint8)
+            # H, W, C = overlapped.shape
+            # crop_h = int(0.1 * H)
+            # crop_w = int(0.1 * W)
+
+            # # 裁剪操作
+            # cropped_image = overlapped[crop_h:-crop_h, crop_w:-crop_w, :]
+            # cropped_image = cv2.resize(cropped_image, (width, height))
+            images.append(overlapped)
+
+        return images
 
     def forward(self, inputs):
-        ipts, labs, _, _, seqL = inputs
+        ipts, labs, var1, var2, seqL = inputs
         # ipts[0 or 1] : [b,t,h,w]
         gt_sils = ipts[0].unsqueeze(2)
         occ_sils = ipts[1].unsqueeze(2)
@@ -249,20 +285,20 @@ class FFormerGait(BaseModel):
         real_sils_embs = self.netDis(gt_sils)
         fake_sils_embs = self.netDis(rec_sil.detach())
         gen_vid_feat = self.netDis(rec_sil)
+            
         rec_out0 = self.layer0(rec_sil.view(b,c,t,h,w)) # [b,64,t,h,w]
         rec_out1 = self.layer1(rec_out0) # [b,64,t,h,w]
         rec_out2 = self.layer2(rec_out1) # [b,128,t,h/2,w/2]
-        rec_out3 = self.layer3(rec_out2) # [b,256,t,h/2,w/2]
+        rec_out3 = self.layer3(rec_out2) # [b,256,t,h/4,w/4]
+        
+        rec_out3 = self.fusion(enc_feat.view(b,-1,t,h//4,w//4),rec_out3)
+        
         rec_out4 = self.layer4(rec_out3) # [b,512,t,h/4,w/4]
-        # enc_feat = self.feature_transform(enc_feat).view(b, -1, t, h//4, w//4)
+        
         # Temporal Pooling, TP
         outs_1 = self.TP(rec_out4, seqL, options={"dim": 2})[0]  # [n, c, h, w]
-        # outs_2 = self.TP(enc_feat, seqL, options={"dim": 2})[0]  # [n, c, h, w]
         # Horizontal Pooling Matching, HPM
-        feat_1 = self.HPP(outs_1)  # [n, c, p]
-        # feat_2 = self.HPP(outs_2)
-        
-        # embed_1 = self.FCs(torch.add(feat_1,feat_2))
+        feat_1 = self.HPP(outs_1)
         embed_1 = self.FCs(feat_1)
         embed_2, logits = self.BNNecks(embed_1)  # [n, c, p] , [n, class_num, p]
         embed = embed_1

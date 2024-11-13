@@ -1,8 +1,9 @@
 data_cfg:
   dataset_name: CASIA-B
-  dataset_root: your_path
-  num_workers: 1
-  remove_no_gallery: false
+  dataset_root: /home/sp/datasets/CASIA_B/Yolov8Seg/pkl/GaitDatasetB-silh_occ_yolo_autocross_t40/casia-b-auto_cross/occ
+  dataset_partition: ./datasets/CASIA-B/CASIA-B.json
+  num_workers: 12
+  remove_no_gallery: false # Remove probe if no gallery for it
   test_dataset_name: CASIA-B
 
 evaluator_cfg:

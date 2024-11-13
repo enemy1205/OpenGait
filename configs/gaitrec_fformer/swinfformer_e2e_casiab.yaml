@@ -6,17 +6,18 @@ data_cfg:
   remove_no_gallery: false # Remove probe if no gallery for it
   test_dataset_name: CASIA-B
 
+
 evaluator_cfg:
   enable_float16: true
   restore_ckpt_strict: true
-  restore_hint: 0
-  save_name: FFormerGait_NO_BASE_Bigger_gait_lr
-  metric: euc # cos
+  restore_hint: 80000
+  save_name: SwinGait3D_B1111_C2
   sampler:
     batch_shuffle: false
-    batch_size: 8
-    sample_type: all_ordered
-    frames_all_limit: 720
+    batch_size: 2
+    sample_type: all_ordered # all indicates whole sequence used to test, while ordered means input sequence by its natural order; Other options:   fixed_unordered
+    frames_all_limit: 720 # limit the number of sampled frames to prevent out of memory
+  metric: euc # cos
   transform:
     - type: BaseSilCuttingTransform
     - type: BaseSilCuttingTransform
@@ -40,9 +41,10 @@ loss_cfg:
     type: CrossEntropyLoss
     log_prefix: softmax
     log_accuracy: true
+    
 
 model_cfg:
-  model: FFormerGait
+  model: FFormerSwinGait
   Backbone:
     mode: p3d
     in_channels: 1
@@ -51,18 +53,19 @@ model_cfg:
       - 1
       - 1
       - 1
-    channels: 
+    channels:
       - 64
-      - 128 
-      - 256
-      - 512
+      - 128
+  bin_num: 
+    - 15
   SeparateBNNecks:
+    in_channels: 128
     class_num: 74
-  # ss_channel: 256  #normal encoder
-  ss_channel: 512 # slim encoder
-  hidden: 512
+    parts_num: 16
+  ss_channel: 256
+  hidden: 256
   stack_num: 2
-  num_head: 2
+  num_head: 4
   dropout: 0.
   kernel_size:
     - 3
@@ -80,53 +83,53 @@ model_cfg:
     input_c: 1
     hidden_size: 32
     use_sigmoid: True
-
+  lr_D: 0.0001
 
 optimizer_cfg:
-  lr: 0.0001
-  betas:
-    - 0
-    - 0.99
-  solver: Adam
-  weight_decay: 0.0005
-# optimizer_cfg:
-#   lr: 0.1
-#   momentum: 0.9
-#   solver: SGD
-#   weight_decay: 0.0005
+  lr: 0.0003
+  solver: AdamW
+  weight_decay: 0.02
 
 scheduler_cfg:
   gamma: 0.1
   milestones: # Learning Rate Reduction at each milestones
-    - 30000
-    - 50000
+    - 100000000
   scheduler: MultiStepLR
 
 trainer_cfg:
   enable_float16: true # half_percesion float for memory reduction and speedup
-  with_test: true
+  fix_BN: false
   log_iter: 500
+  with_test: True
+  optimizer_reset: True
   restore_ckpt_strict: false
   restore_hint: 0
-  optimizer_reset: true
-  scheduler_reset: true
+  save_iter: 20000
+  save_name: SwinGait3D_B1111_C2
   sync_BN: true
-  save_iter: 10000
-  save_name: FFormerGait_NO_BASE_Bigger_gait_lr
-  total_iter: 60000
+  T_max_iter: 60000
+  total_iter: 80000
   sampler:
-    batch_shuffle: false
+    batch_shuffle: true
     batch_size:
-      - 8 # TripletSampler, batch_size[0] indicates Number of Identity
-      - 4 #                 batch_size[1] indicates Samples sequqnce for each Identity
-    # frames_num_fixed: 30
-    # frames_skip_num: 0
+      - 2 # TripletSampler, batch_size[0] indicates Number of Identity
+      - 2 #                 batch_size[1] indicates Samples sequqnce for each Identity
     frames_num_fixed: 30 # fixed frames number for training
-    frames_num_max: 40 # max frames number for unfixed training
-    frames_num_min: 20 # min frames number for unfixed traing
-    sample_type: fixed_ordered
     frames_skip_num: 0
+    sample_type: fixed_ordered # fixed control input frames number, unordered for controlling order of input tensor; Other options: unfixed_ordered or all_ordered
     type: TripletSampler
   transform:
+    # - type: Compose
+    #   trf_cfg:
+    #     - type: RandomPerspective
+    #       prob: 0.2
+    #     - type: BaseSilCuttingTransform
+    #     - type: RandomHorizontalFlip
+    #       prob: 0.2
+    #     - type: RandomRotate
+    #       prob: 0.2
     - type: BaseSilCuttingTransform
     - type: BaseSilCuttingTransform
+
+
+

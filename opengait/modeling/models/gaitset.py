@@ -49,7 +49,7 @@ class GaitSet(BaseModel):
         ipts, labs, _, _, seqL = inputs
         #!!!!!!!changed to occ input!!!!!!!!!!!
         # normal ipts[0] occ ipts[1] 
-        sils = ipts[1]  # [n, s, h, w]
+        sils = ipts[0]  # [n, s, h, w]
         if len(sils.size()) == 4:
             sils = sils.unsqueeze(1)
 

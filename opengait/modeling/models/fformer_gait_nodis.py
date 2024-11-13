@@ -1,9 +1,9 @@
 import torch.optim as optim
 import torch.nn as nn
 import torch
-import torch.nn.functional as F
+import os.path as osp
 from ..base_model import BaseModel
-from ..backbones.fuse_former import deconv,Discriminator,TransformerBlock,SoftComp,SoftSplit,AddPosEmb,Encoder
+from ..backbones.fuse_former import deconv,TransformerBlock,SoftComp,SoftSplit,AddPosEmb,Encoder
 from ..modules import SetBlockWrapper, HorizontalPoolingPyramid, PackSequenceWrapper, SeparateFCs, SeparateBNNecks, conv1x1, conv3x3, BasicBlock2D, BasicBlockP3D, BasicBlock3D
 
 from utils import get_valid_args, get_attr_from
@@ -16,66 +16,9 @@ blocks_map = {
     '3d': BasicBlock3D
 }
 
-class AttentionFusion(nn.Module): 
-    def __init__(self, in_channels=64, squeeze_ratio=16):
-        super(AttentionFusion, self).__init__()
-        hidden_dim = int(in_channels / squeeze_ratio)
-        self.conv = SetBlockWrapper(
-            nn.Sequential(
-                conv1x1(in_channels * 2, hidden_dim), 
-                nn.BatchNorm2d(hidden_dim), 
-                nn.ReLU(inplace=True), 
-                conv3x3(hidden_dim, hidden_dim), 
-                nn.BatchNorm2d(hidden_dim), 
-                nn.ReLU(inplace=True), 
-                conv1x1(hidden_dim, in_channels * 2), 
-            )
-        )
     
-    def forward(self, sil_feat, map_feat): 
-        '''
-            sil_feat: [n, c, s, h, w]
-            map_feat: [n, c, s, h, w]
-        '''
-        c = sil_feat.size(1)
-        feats = torch.cat([sil_feat, map_feat], dim=1)
-        score = self.conv(feats) # [n, 2 * c, s, h, w]
-        score = rearrange(score, 'n (d c) s h w -> n d c s h w', d=2)
-        score = F.softmax(score, dim=1)
-        retun = sil_feat * score[:, 0] + map_feat * score[:, 1]
-        return retun
-
-class CatFusion(nn.Module): 
-    def __init__(self, in_channels=64):
-        super(CatFusion, self).__init__()
-        self.conv = SetBlockWrapper(
-            nn.Sequential(
-                conv1x1(in_channels * 2, in_channels), 
-            )
-        )
-
-    def forward(self, sil_feat, map_feat): 
-        '''
-            sil_feat: [n, c, s, h, w]
-            map_feat: [n, c, s, h, w]
-        '''
-        feats = torch.cat([sil_feat, map_feat])
-        retun = self.conv(feats)
-        return retun
-
-class PlusFusion(nn.Module): 
-    def __init__(self):
-        super(PlusFusion, self).__init__()
-
-    def forward(self, sil_feat, map_feat): 
-        '''
-            sil_feat: [n, c, s, h, w]
-            map_feat: [n, c, s, h, w]
-        '''
-        return sil_feat + map_feat
-
+class FFormerGait_WODis(BaseModel):
     
-class FFormerGait(BaseModel):
     
     def build_network(self, model_cfg):
         
@@ -124,11 +67,6 @@ class FFormerGait(BaseModel):
 
         self.TP = PackSequenceWrapper(torch.max)
         self.HPP = HorizontalPoolingPyramid(bin_num=[16])
-        
-        # self.feature_transform = nn.Sequential(
-        # conv1x1( channels[2], channels[3]),
-        # nn.BatchNorm2d(channels[3]),
-        # nn.ReLU(inplace=True))
 
         ss_channel = model_cfg['ss_channel']
         ts_hidden = model_cfg['hidden']
@@ -163,8 +101,6 @@ class FFormerGait(BaseModel):
             nn.LeakyReLU(0.2, inplace=True),
             nn.Conv2d(64, 1, kernel_size=3, stride=1, padding=1)
         )
-
-        self.netDis = Discriminator(model_cfg['Dis'],use_sigmoid=True)
 
     def make_layer(self, block, planes, stride, blocks_num, mode='2d'):
 
@@ -201,9 +137,8 @@ class FFormerGait(BaseModel):
                      list(self.decoder.parameters())
         params_list = [
             {'params': transformer_params, 'lr': optimizer_cfg['lr'], 'weight_decay':optimizer_cfg['weight_decay']}, 
-            {'params': self.netDis.parameters(),'lr': optimizer_cfg['lr'] *1 , 'weight_decay': optimizer_cfg['weight_decay']}, 
-            {'params': self.FCs.parameters(), 'lr': optimizer_cfg['lr'] * 1, 'weight_decay': optimizer_cfg['weight_decay']}, 
-            {'params': self.BNNecks.parameters(), 'lr': optimizer_cfg['lr']* 1, 'weight_decay': optimizer_cfg['weight_decay']}, 
+            {'params': self.FCs.parameters(), 'lr': optimizer_cfg['lr'], 'weight_decay': optimizer_cfg['weight_decay']}, 
+            {'params': self.BNNecks.parameters(), 'lr': optimizer_cfg['lr'], 'weight_decay': optimizer_cfg['weight_decay']}, 
         ]
         for i in range(5): 
             if hasattr(self, 'layer%d'%i): 
@@ -212,24 +147,6 @@ class FFormerGait(BaseModel):
                 )
         optimizer = optimizer(params_list,**valid_arg)
         return optimizer
-    # def finetune_parameters(self):
-    #     dis_tune_params = list()
-    #     others_params = list()
-    #     for name, p in self.named_parameters():
-    #         if not p.requires_grad:
-    #             continue
-    #         if 'dis' in name:
-    #             dis_tune_params.append(p)
-    #         else:
-    #             others_params.append(p)
-    #     return [{'params': dis_tune_params, 'lr': self.dis_lr},{'params': others_params}]
-
-    # def get_optimizer(self, optimizer_cfg):
-    #     self.msg_mgr.log_info(optimizer_cfg)
-    #     optimizer = get_attr_from([optim], optimizer_cfg['solver'])
-    #     valid_arg = get_valid_args(optimizer, optimizer_cfg, ['solver'])
-    #     optimizer = optimizer(self.finetune_parameters(), **valid_arg)
-    #     return optimizer
 
     def forward(self, inputs):
         ipts, labs, _, _, seqL = inputs
@@ -237,49 +154,76 @@ class FFormerGait(BaseModel):
         gt_sils = ipts[0].unsqueeze(2)
         occ_sils = ipts[1].unsqueeze(2)
         b, t, c, h, w = occ_sils.size()
-        enc_feat = self.encoder(occ_sils.view(b * t, c, h, w))        
-        trans_feat = self.ss(enc_feat, b)
-        trans_feat = self.add_pos_emb(trans_feat)
-        trans_feat = self.transformer(trans_feat)
-        trans_feat = self.sc(trans_feat, t)
-        enc_feat = enc_feat + trans_feat  # [b*t,c ,h/4 ,w/4]
-        rec_sil = self.decoder(enc_feat)
-        rec_sil = torch.tanh(rec_sil)
-        gt_sils = gt_sils.view(b*t, c, h, w)
-        real_sils_embs = self.netDis(gt_sils)
-        fake_sils_embs = self.netDis(rec_sil.detach())
-        gen_vid_feat = self.netDis(rec_sil)
-        rec_out0 = self.layer0(rec_sil.view(b,c,t,h,w)) # [b,64,t,h,w]
-        rec_out1 = self.layer1(rec_out0) # [b,64,t,h,w]
-        rec_out2 = self.layer2(rec_out1) # [b,128,t,h/2,w/2]
-        rec_out3 = self.layer3(rec_out2) # [b,256,t,h/2,w/2]
-        rec_out4 = self.layer4(rec_out3) # [b,512,t,h/4,w/4]
-        # enc_feat = self.feature_transform(enc_feat).view(b, -1, t, h//4, w//4)
-        # Temporal Pooling, TP
-        outs_1 = self.TP(rec_out4, seqL, options={"dim": 2})[0]  # [n, c, h, w]
-        # outs_2 = self.TP(enc_feat, seqL, options={"dim": 2})[0]  # [n, c, h, w]
-        # Horizontal Pooling Matching, HPM
-        feat_1 = self.HPP(outs_1)  # [n, c, p]
-        # feat_2 = self.HPP(outs_2)
-        
-        # embed_1 = self.FCs(torch.add(feat_1,feat_2))
-        embed_1 = self.FCs(feat_1)
-        embed_2, logits = self.BNNecks(embed_1)  # [n, c, p] , [n, class_num, p]
-        embed = embed_1
-        retval = {
-        'training_feat': {
-            'adv': {'logits': fake_sils_embs, 'labels': real_sils_embs},
-            'gan': {'pred_silt_video':rec_sil,'gt_silt_video':gt_sils,'gen_vid_feat':gen_vid_feat},
-            'triplet': {'embeddings': embed_1, 'labels': labs},
-            'softmax': {'logits': logits, 'labels': labs}
-        },
-        'visual_summary': {
-            'image/gt_sils': gt_sils, 'image/occ_sils': occ_sils.view(b*t, c, h, w), "image/rec_sils": rec_sil.view(b*t, c, h, w)            
-        },
-        'inference_feat': {
-            'gt': gt_sils.view(b*t, c, h, w),
-            'pred': rec_sil.view(b*t, c, h, w),
-            'embeddings': embed
-        }
-        }
+        if self.training:
+
+            enc_feat = self.encoder(occ_sils.view(b * t, c, h, w))        
+            trans_feat = self.ss(enc_feat, b)
+            trans_feat = self.add_pos_emb(trans_feat)
+            trans_feat = self.transformer(trans_feat)
+            trans_feat = self.sc(trans_feat, t)
+            enc_feat = enc_feat + trans_feat  # [b*t,c ,h/4 ,w/4]
+            rec_sil = self.decoder(enc_feat)
+            rec_sil = torch.tanh(rec_sil)
+            gt_sils = gt_sils.view(b*t, c, h, w)
+
+            rec_out0 = self.layer0(rec_sil.view(b,c,t,h,w)) # [b,64,t,h,w]
+            rec_out1 = self.layer1(rec_out0) # [b,64,t,h,w]
+            rec_out2 = self.layer2(rec_out1) # [b,128,t,h/2,w/2]
+            rec_out3 = self.layer3(rec_out2) # [b,256,t,h/2,w/2]
+            rec_out4 = self.layer4(rec_out3) # [b,512,t,h/4,w/4]
+            # Temporal Pooling, TP
+            outs_1 = self.TP(rec_out4, seqL, options={"dim": 2})[0]  # [n, c, h, w]
+            # Horizontal Pooling Matching, HPM
+            feat_1 = self.HPP(outs_1)  # [n, c, p]
+
+            embed_1 = self.FCs(feat_1)
+
+            embed_2, logits = self.BNNecks(embed_1)  # [n, c, p] , [n, class_num, p]
+            embed = embed_1
+            retval = {
+            'training_feat': {
+                'gan': {'pred_silt_video':rec_sil,'gt_silt_video':gt_sils},
+                'edge': {'pred_silt_video':rec_sil,'gt_silt_video':gt_sils,'b_s':b},
+                'triplet': {'embeddings': embed_1, 'labels': labs},
+                'softmax': {'logits': logits, 'labels': labs}
+            },
+            'visual_summary': {
+                'image/gt_sils': gt_sils, 'image/occ_sils': occ_sils.view(b*t, c, h, w), "image/rec_sils": rec_sil.view(b*t, c, h, w)            
+            },
+            'inference_feat': {
+                'embeddings': embed
+            }
+            }
+        else:
+            gt_sils = gt_sils.view(b*t, c, h, w)
+            enc_feat = self.encoder(gt_sils)        
+            trans_feat = self.ss(enc_feat, b)
+            trans_feat = self.add_pos_emb(trans_feat)
+            trans_feat = self.transformer(trans_feat)
+            trans_feat = self.sc(trans_feat, t)
+            enc_feat = enc_feat + trans_feat  # [b*t,c ,h/4 ,w/4]
+            rec_sil = self.decoder(enc_feat)
+            rec_sil = torch.tanh(rec_sil)
+            rec_out0 = self.layer0(rec_sil.view(b,c,t,h,w)) # [b,64,t,h,w]
+            rec_out1 = self.layer1(rec_out0) # [b,64,t,h,w]
+            rec_out2 = self.layer2(rec_out1) # [b,128,t,h/2,w/2]
+            rec_out3 = self.layer3(rec_out2) # [b,256,t,h/2,w/2]
+            rec_out4 = self.layer4(rec_out3) # [b,512,t,h/4,w/4]
+            # Temporal Pooling, TP
+            outs_1 = self.TP(rec_out4, seqL, options={"dim": 2})[0]  # [n, c, h, w]
+            # Horizontal Pooling Matching, HPM
+            feat_1 = self.HPP(outs_1)  # [n, c, p]
+
+            embed_1 = self.FCs(feat_1)
+
+            embed_2, logits = self.BNNecks(embed_1)  # [n, c, p] , [n, class_num, p]
+            embed = embed_1
+            retval = {
+            'visual_summary': {
+                'image/gt_sils': gt_sils, 'image/occ_sils': occ_sils.view(b*t, c, h, w), "image/rec_sils": rec_sil.view(b*t, c, h, w)            
+            },
+            'inference_feat': {
+                'embeddings': embed
+            }
+            }
         return retval

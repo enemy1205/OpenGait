@@ -13,7 +13,11 @@ Download URL: http://www.cbsr.ia.ac.cn/GaitDatasetB-silh.zip
             ......
         ......
     ```
-- Run `python datasets/pretreatment.py --input_path CASIA-B --output_path CASIA-B-pkl`
+- Run `python datasets/pretreatment.py --input_path /home/sp/datasets/CASIA_B/Yolov8Seg/GaitDatasetB-silh_occ_yolo_autocross_t40/casia-b-auto_cross/occ --output_path /home/sp/datasets/CASIA_B/Yolov8Seg/pkl/GaitDatasetB-silh_occ_yolo_autocross_t40/casia-b-auto_cross/occ`
+
+python datasets/pretreatment_wo_cut.py --input_path /home/sp/datasets/CASIA_B/Yolov8Seg/GaitDatasetB-silh_static_occ_utility_pole --output_path /home/sp/datasets/CASIA_B/Yolov8Seg/pkl/GaitDatasetB-silh_static_occ_utility_pole
+
+python datasets/pretreatment_wo_cut.py --input_path /home/sp/datasets/OUMVLP/OccDataset/OUMVLP_Silhouette_silh_occ_yolo-autopara-h50/ou-mvlp-auto_para/occ --output_path /home/sp/datasets/OUMVLP/OccDataset/pkl/OUMVLP_Silhouette_silh_occ_yolo-autopara-h50/ou-mvlp-auto_para/occ
 - Processed
     ```
     CASIA-B-pkl

@@ -9,8 +9,8 @@ data_cfg:
 evaluator_cfg:
   enable_float16: true
   restore_ckpt_strict: true
-  restore_hint: 0
-  save_name: FFormerGait_NO_BASE_Bigger_gait_lr
+  restore_hint: 10000
+  save_name: FFormerGait_Edge_WODis
   metric: euc # cos
   sampler:
     batch_shuffle: false
@@ -23,14 +23,14 @@ evaluator_cfg:
 
 loss_cfg:
   - loss_term_weight: 1
-    type: AdversarialLoss
-    log_prefix: adv
-  - loss_term_weight: 1
     type: GanLoss
     log_prefix: gan
     imgloss_type: 'L1'
     adversarial_weight: 1
     img_weight: 100
+  - loss_term_weight: 1
+    type: EdgeLoss
+    log_prefix: edge
   - loss_term_weight: 1
     margin: 0.2
     type: TripletLoss
@@ -42,7 +42,7 @@ loss_cfg:
     log_accuracy: true
 
 model_cfg:
-  model: FFormerGait
+  model: FFormerGait_WODis
   Backbone:
     mode: p3d
     in_channels: 1
@@ -76,10 +76,6 @@ model_cfg:
   output_size:
     - 16
     - 11
-  Dis:
-    input_c: 1
-    hidden_size: 32
-    use_sigmoid: True
 
 
 optimizer_cfg:
@@ -112,8 +108,8 @@ trainer_cfg:
   scheduler_reset: true
   sync_BN: true
   save_iter: 10000
-  save_name: FFormerGait_NO_BASE_Bigger_gait_lr
-  total_iter: 60000
+  save_name: FFormerGait_Edge_WODis
+  total_iter: 80000
   sampler:
     batch_shuffle: false
     batch_size:

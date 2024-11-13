@@ -1,25 +1,25 @@
 data_cfg:
   dataset_name: CASIA-B
-  dataset_root: /home/sp/datasets/CASIA_B/silhouettes_seg_cut_pkl
+  dataset_root: /home/sp/datasets/CASIA_B/Silhouette_pkl
+  dataset_partition: ./datasets/CASIA-B/CASIA-B.json
   num_workers: 12
-  remove_no_gallery: false
+  remove_no_gallery: false # Remove probe if no gallery for it
   test_dataset_name: CASIA-B
 
 evaluator_cfg:
   enable_float16: true
   restore_ckpt_strict: true
-  restore_hint: 0
-  save_name: Phase_Rec
-  eval_func: evaluate_gait_rec
+  restore_hint: 50000
+  save_name: FFormerGait_NO_BASE
+  metric: euc # cos
   sampler:
-    batch_size: 32
-    frames_num_fixed: 30 # fixed frames number for training
-    sample_type: fixed_ordered
-    frames_skip_num: 0
-    type: InferenceSampler
+    batch_shuffle: false
+    batch_size: 8
+    sample_type: all_ordered
+    frames_all_limit: 720
   transform:
-    - type: BaseSilTransform
-    - type: BaseSilTransform
+    - type: BaseSilCuttingTransform
+    - type: BaseSilCuttingTransform
 
 loss_cfg:
   - loss_term_weight: 1
@@ -35,54 +35,60 @@ loss_cfg:
     margin: 0.2
     type: TripletLoss
     log_prefix: triplet
+  - loss_term_weight: 1.0
+    scale: 16
+    type: CrossEntropyLoss
+    log_prefix: softmax
+    log_accuracy: true
 
 model_cfg:
-  model: SimVP_Rec
-  GaitSet:
-    in_channels:
+  model: FFormerGait
+  Backbone:
+    mode: p3d
+    in_channels: 1
+    layers:
       - 1
-      - 32
+      - 1
+      - 1
+      - 1
+    channels: 
       - 64
-      - 128
-    SeparateFCs:
-      in_channels: 128
-      out_channels: 256
-      parts_num: 62
-    bin_num:
-      - 16
-      - 8
-      - 4
-      - 2
-      - 1
-  shape_in: 
-    - 30
-    - 1
-    - 64
-    - 64
-  hid_S: 16
-  hid_T: 256
-  N_S: 4
-  N_T: 4
-  incep_ker:
+      - 128 
+      - 256
+      - 512
+  SeparateBNNecks:
+    class_num: 74
+  # ss_channel: 256  #normal encoder
+  ss_channel: 512 # slim encoder
+  hidden: 512
+  stack_num: 2
+  num_head: 2
+  dropout: 0.
+  kernel_size:
     - 3
-    - 5
-    - 7
+    - 3
+  padding:
+    - 3
+    - 3
+  stride:
+    - 3
+    - 3
+  output_size:
+    - 16
     - 11
-  groups: 4
   Dis:
     input_c: 1
     hidden_size: 32
     use_sigmoid: True
-  gait_lr: 0.001
+
 
 optimizer_cfg:
-  lr: 0.003
+  lr: 0.0001
   betas:
     - 0
     - 0.99
   solver: Adam
   weight_decay: 0.0005
-
 # optimizer_cfg:
 #   lr: 0.1
 #   momentum: 0.9
@@ -92,30 +98,26 @@ optimizer_cfg:
 scheduler_cfg:
   gamma: 0.1
   milestones: # Learning Rate Reduction at each milestones
-  # adam
-    - 25000
+    - 30000
     - 50000
-# sgd
-    # - 20000
-    # - 40000
-    # - 50000
   scheduler: MultiStepLR
+
 trainer_cfg:
   enable_float16: true # half_percesion float for memory reduction and speedup
   with_test: true
-  log_iter: 100
-  restore_ckpt_strict: true
+  log_iter: 500
+  restore_ckpt_strict: false
   restore_hint: 0
   optimizer_reset: true
   scheduler_reset: true
   sync_BN: true
   save_iter: 10000
-  save_name: GAIT_REC_2_phase
-  total_iter: 80000
+  save_name: FFormerGait_NO_BASE
+  total_iter: 60000
   sampler:
     batch_shuffle: false
     batch_size:
-      - 16 # TripletSampler, batch_size[0] indicates Number of Identity
+      - 8 # TripletSampler, batch_size[0] indicates Number of Identity
       - 4 #                 batch_size[1] indicates Samples sequqnce for each Identity
     # frames_num_fixed: 30
     # frames_skip_num: 0
@@ -126,6 +128,5 @@ trainer_cfg:
     frames_skip_num: 0
     type: TripletSampler
   transform:
-    - type: BaseSilTransform
-    - type: BaseSilTransform
-
+    - type: BaseSilCuttingTransform
+    - type: BaseSilCuttingTransform

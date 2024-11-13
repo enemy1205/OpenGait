@@ -1,6 +1,6 @@
 data_cfg:
   dataset_name: CASIA-B
-  dataset_root: /home/sp/datasets/CASIA_B/Silhouette_pkl
+  dataset_root: /home/sp/datasets/CASIA_B/Yolov8Seg/pkl/Silhouette_pkl
   dataset_partition: ./datasets/CASIA-B/CASIA-B.json
   num_workers: 12
   remove_no_gallery: false # Remove probe if no gallery for it
@@ -10,11 +10,11 @@ evaluator_cfg:
   enable_float16: true
   restore_ckpt_strict: true
   restore_hint: 0
-  save_name: FFormerGait_NO_BASE_Bigger_gait_lr
+  save_name: FFormerGait_NEW_OCC_CASIAB
   metric: euc # cos
   sampler:
     batch_shuffle: false
-    batch_size: 8
+    batch_size: 2
     sample_type: all_ordered
     frames_all_limit: 720
   transform:
@@ -112,7 +112,7 @@ trainer_cfg:
   scheduler_reset: true
   sync_BN: true
   save_iter: 10000
-  save_name: FFormerGait_NO_BASE_Bigger_gait_lr
+  save_name: FFormerGait_NEW_OCC_CASIAB
   total_iter: 60000
   sampler:
     batch_shuffle: false

@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from ..base_model import BaseModel
+from ..backbones.fuse_former import deconv,Discriminator,TransformerBlock,SoftComp,SoftSplit,AddPosEmb,Encoder
 from ..modules import HorizontalPoolingPyramid, PackSequenceWrapper, SeparateFCs, SeparateBNNecks, SetBlockWrapper, ParallelBN1d
 
 # ******* Copy from https://github.com/haofanwang/video-swin-transformer-pytorch/blob/main/video_swin_transformer.py *******
@@ -639,7 +640,7 @@ class SwinTransformer3D(nn.Module):
             self.layers.append(layer)
 
         # self.num_features = int(embed_dim * 2**self.num_layers)
-        self.num_features = 512
+        self.num_features = 256
 
         # add a norm layer for each output
         self.norm = norm_layer(self.num_features)
@@ -784,10 +785,10 @@ import os.path as osp
 from collections import OrderedDict
 from utils import get_valid_args, get_attr_from
 
-class SwinGait(BaseModel):
+class FFormerSwinGait(BaseModel):
     def __init__(self, cfgs, training): 
         self.T_max_iter = cfgs['trainer_cfg']['T_max_iter']
-        super(SwinGait, self).__init__(cfgs, training=training)
+        super(FFormerSwinGait, self).__init__(cfgs, training=training)
 
     def build_network(self, model_cfg):
         channels = model_cfg['Backbone']['channels']
@@ -808,7 +809,7 @@ class SwinGait(BaseModel):
         self.transformer = SwinTransformer3D(
             patch_size = [1, 2, 2], 
             in_chans = channels[1], 
-            embed_dim = 256, 
+            embed_dim = 128, 
             depths = [layers[2], layers[3]], 
             num_heads = [16, 32], 
             window_size = [3, 3, 5], 
@@ -817,11 +818,45 @@ class SwinGait(BaseModel):
             patch_norm = True, 
         )
 
-        self.FCs = SeparateFCs(model_cfg['SeparateBNNecks']['parts_num'], in_channels=512, out_channels=256)
+        self.FCs = SeparateFCs(model_cfg['SeparateBNNecks']['parts_num'], in_channels=256, out_channels=128)
         self.BNNecks = SeparateBNNecks(**model_cfg['SeparateBNNecks'])
         self.TP = PackSequenceWrapper(torch.max)
         self.HPP = HorizontalPoolingPyramid(bin_num=model_cfg['bin_num'])
+        ss_channel = model_cfg['ss_channel']
+        ts_hidden = model_cfg['hidden']
+        st_stack_num = model_cfg['stack_num']
+        num_head = model_cfg['num_head']
+        kernel_size = (model_cfg['kernel_size'][0],model_cfg['kernel_size'][1])
+        padding = (model_cfg['padding'][0],model_cfg['padding'][1])
+        soft_stride = (model_cfg['stride'][0],model_cfg['stride'][1])
+        output_size = (model_cfg['output_size'][0],model_cfg['output_size'][1])
+        
+        blocks = []
+        dropout = model_cfg['dropout'] 
+        t2t_params = {'kernel_size': kernel_size, 'stride': soft_stride, 'padding': padding, 'output_size': output_size}
+        n_vecs = 1
+        for i, d in enumerate(kernel_size):
+            n_vecs *= int((output_size[i] + 2 * padding[i] - (d - 1) - 1) / soft_stride[i] + 1)
+        for _ in range(st_stack_num):
+            blocks.append(TransformerBlock(hidden=ts_hidden, num_head=num_head, dropout=dropout, n_vecs=n_vecs,
+                                           t2t_params=t2t_params))
+        self.ss_transformer = nn.Sequential(*blocks)
+        self.ss = SoftSplit(ss_channel // 2, ts_hidden, kernel_size, soft_stride, padding, dropout=dropout)
+        self.add_pos_emb = AddPosEmb(n_vecs, ts_hidden)
+        self.sc = SoftComp(ss_channel // 2, ts_hidden, output_size, kernel_size, soft_stride, padding)
+        self.encoder = Encoder() 
+        # decoder: decode frames from features
+        self.decoder = nn.Sequential(
+            deconv(ss_channel // 2, 128, kernel_size=3, padding=1),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(128, 64, kernel_size=3, stride=1, padding=1),
+            nn.LeakyReLU(0.2, inplace=True),
+            deconv(64, 64, kernel_size=3, padding=1),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(64, 1, kernel_size=3, stride=1, padding=1)
+        )
 
+        self.netDis = Discriminator(model_cfg['Dis'],use_sigmoid=True)
 
 
     def get_optimizer(self, optimizer_cfg):
@@ -835,6 +870,7 @@ class SwinGait(BaseModel):
             {'params': [p for n, p in transformer_params if any(nd in n for nd in transformer_no_decay)], 'lr': optimizer_cfg['lr'], 'weight_decay': 0.}, 
             {'params': [p for n, p in transformer_params if not any(nd in n for nd in transformer_no_decay)], 'lr': optimizer_cfg['lr'], 'weight_decay': optimizer_cfg['weight_decay']}, 
             {'params': self.FCs.parameters(), 'lr': optimizer_cfg['lr'] * 0.1, 'weight_decay': optimizer_cfg['weight_decay']}, 
+            {'params': self.netDis.parameters(), 'lr': optimizer_cfg['lr'] * 0.1, 'weight_decay': optimizer_cfg['weight_decay']}, 
             {'params': self.BNNecks.parameters(), 'lr': optimizer_cfg['lr'] * 0.1, 'weight_decay': optimizer_cfg['weight_decay']}, 
         ]
         for i in range(5): 
@@ -890,13 +926,26 @@ class SwinGait(BaseModel):
     def forward(self, inputs):
         if self.training:
             adjust_learning_rate(self.optimizer, self.iteration, T_max_iter=self.T_max_iter)
-        ipts, labs, _, _, seqL = inputs
-
-        sils = ipts[0].unsqueeze(1)
-
+        ipts, labs, _, _, seqL = inputs        
+        gt_sils = ipts[0].unsqueeze(2)
+        occ_sils = ipts[1].unsqueeze(2)
+        b, t, c, h, w = occ_sils.size()
         del ipts
+        enc_feat = self.encoder(occ_sils.view(b * t, c, h, w))        
+        trans_feat = self.ss(enc_feat, b)
+        trans_feat = self.add_pos_emb(trans_feat)
+        trans_feat = self.ss_transformer(trans_feat)
+        trans_feat = self.sc(trans_feat, t)
+        enc_feat = enc_feat + trans_feat  # [b*t,c ,h/4 ,w/4]
+        rec_sil = self.decoder(enc_feat)
+        rec_sil = torch.tanh(rec_sil)
+        
+        gt_sils = gt_sils.view(b*t, c, h, w)
+        real_sils_embs = self.netDis(gt_sils)
+        fake_sils_embs = self.netDis(rec_sil.detach())
+        gen_vid_feat = self.netDis(rec_sil)
 
-        out0 = self.layer0(sils)
+        out0 = self.layer0(rec_sil.view(b,c,t,h,w))
         out1 = self.layer1(out0)
         out2 = self.layer2(out1) # [n, c, s, h, w]
         out2 = self.ulayer(out2)
@@ -918,11 +967,13 @@ class SwinGait(BaseModel):
 
         retval = {
             'training_feat': {
+                'adv': {'logits': fake_sils_embs, 'labels': real_sils_embs},
+                'gan': {'pred_silt_video':rec_sil,'gt_silt_video':gt_sils,'gen_vid_feat':gen_vid_feat},
                 'triplet': {'embeddings': embed_1, 'labels': labs},
                 'softmax': {'logits': logits, 'labels': labs}
             },
             'visual_summary': {
-                'image/sils': rearrange(sils,'n c s h w -> (n s) c h w')
+                'image/gt_sils': gt_sils, 'image/occ_sils': occ_sils.view(b*t, c, h, w), "image/rec_sils": rec_sil.view(b*t, c, h, w)            
             },
             'inference_feat': {
                 'embeddings': embed
