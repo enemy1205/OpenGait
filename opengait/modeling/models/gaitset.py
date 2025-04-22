@@ -62,8 +62,8 @@ class GaitSet(BaseModel):
         gl = gl + self.set_pooling(outs, seqL, options={"dim": 2})[0]
         gl = self.gl_block3(gl)
 
-        outs = self.set_block3(outs)
-        outs = self.set_pooling(outs, seqL, options={"dim": 2})[0]
+        outs = self.set_block3(outs)        # [b,128,t,h,w]
+        outs = self.set_pooling(outs, seqL, options={"dim": 2})[0]  # [b,128,h,w]
         gl = gl + outs
 
         # Horizontal Pooling Matching, HPM

@@ -1,6 +1,6 @@
 data_cfg:
   dataset_name: CASIA-B
-  dataset_root: /home/sp/datasets/CASIA_B/silhouettes_seg_cut_pkl
+  dataset_root: /home/sp/datasets/CASIA_B/official/GaitDatasetB-silh_pkl
   dataset_partition: ./datasets/CASIA-B/CASIA-B.json
   num_workers: 12
   remove_no_gallery: false # Remove probe if no gallery for it

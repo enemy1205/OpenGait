@@ -117,7 +117,7 @@ class OcclusionDataSet(tordata.Dataset):
                         if seq_dirs != []:
                             seq_dirs = [osp.join(seq_path, dir)
                                         for dir in seq_dirs]
-                            seq_dirs.append(seq_dirs[0].replace('Silhouette_pkl','Silhouette_occ_pkl'))
+                            seq_dirs.append(seq_dirs[0].replace('GaitDatasetB-silh_pkl','GaitDatasetB-silh_occ_pkl'))
                             if data_in_use is not None:
                                 seq_dirs = [dir for dir, use_bl in zip(
                                     seq_dirs, data_in_use) if use_bl]

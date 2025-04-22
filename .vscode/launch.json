@@ -9,8 +9,8 @@
             "type": "python",
             "request": "launch",
             "program": "${file}",
-            "env": {"CUDA_VISIBLE_DEVICES":"1"},
-            "args": ["--cfgs=configs/gaitrec_fformer/fformergait_casiab_wodis.yaml", "--phase=train"],
+            "env": {"CUDA_VISIBLE_DEVICES":"0"},
+            "args": ["--cfgs=configs/deepgaitv2/DeepGaitV2_atten_gait3d.yaml", "--phase=train"],
             "console": "integratedTerminal",
             "justMyCode": true
         }

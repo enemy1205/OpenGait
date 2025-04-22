@@ -844,10 +844,9 @@ class FFormerSwinGait(BaseModel):
         self.ss = SoftSplit(ss_channel // 2, ts_hidden, kernel_size, soft_stride, padding, dropout=dropout)
         self.add_pos_emb = AddPosEmb(n_vecs, ts_hidden)
         self.sc = SoftComp(ss_channel // 2, ts_hidden, output_size, kernel_size, soft_stride, padding)
-        self.encoder = Encoder() 
         # decoder: decode frames from features
         self.decoder = nn.Sequential(
-            deconv(ss_channel // 2, 128, kernel_size=3, padding=1),
+            nn.Conv2d(ss_channel // 2, 128, kernel_size=3, padding=1),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Conv2d(128, 64, kernel_size=3, stride=1, padding=1),
             nn.LeakyReLU(0.2, inplace=True),
@@ -927,11 +926,17 @@ class FFormerSwinGait(BaseModel):
         if self.training:
             adjust_learning_rate(self.optimizer, self.iteration, T_max_iter=self.T_max_iter)
         ipts, labs, _, _, seqL = inputs        
-        gt_sils = ipts[0].unsqueeze(2)
-        occ_sils = ipts[1].unsqueeze(2)
-        b, t, c, h, w = occ_sils.size()
+        gt_sils = ipts[0].unsqueeze(1)
+        occ_sils = ipts[1].unsqueeze(1)
+        b, c, t, h, w = occ_sils.size()
         del ipts
-        enc_feat = self.encoder(occ_sils.view(b * t, c, h, w))        
+
+
+        out0 = self.layer0(occ_sils)
+        out1 = self.layer1(out0)
+        out2 = self.layer2(out1) # [n, c, s, h, w]
+        
+        enc_feat = out2.view(b * t, -1, h//2, w//2)
         trans_feat = self.ss(enc_feat, b)
         trans_feat = self.add_pos_emb(trans_feat)
         trans_feat = self.ss_transformer(trans_feat)
@@ -943,11 +948,9 @@ class FFormerSwinGait(BaseModel):
         gt_sils = gt_sils.view(b*t, c, h, w)
         real_sils_embs = self.netDis(gt_sils)
         fake_sils_embs = self.netDis(rec_sil.detach())
-        gen_vid_feat = self.netDis(rec_sil)
+        gen_vid_feat = self.netDis(rec_sil)        
 
-        out0 = self.layer0(rec_sil.view(b,c,t,h,w))
-        out1 = self.layer1(out0)
-        out2 = self.layer2(out1) # [n, c, s, h, w]
+
         out2 = self.ulayer(out2)
         out4 = self.transformer(out2) # [n, 768, s/4, 4, 3]
 

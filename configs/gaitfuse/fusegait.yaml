@@ -1,21 +1,20 @@
 data_cfg:
-  dataset_name: Gait3D
-  dataset_root: /home/sp/datasets/Gait3D/2D_Silhouettes_64x64_pkl
-  dataset_partition: ./datasets/Gait3D/Gait3D.json
+  dataset_name: CASIA-B
+  dataset_root: /home/sp/datasets/CASIA_B/official/GaitDatasetB-silh_pkl
+  dataset_partition: ./datasets/CASIA-B/CASIA-B.json
   num_workers: 8
   remove_no_gallery: false # Remove probe if no gallery for it
-  test_dataset_name: Gait3D
+  test_dataset_name: CASIA-B
 
 evaluator_cfg:
   enable_float16: true
   restore_ckpt_strict: true
-  restore_hint: 0
-  save_name: FuseGait_Gait3D_TTTTT
-  eval_func: evaluate_Gait3D
+  restore_hint: 20000
+  save_name: FuseGait_10_official_CASIAB
   metric: euc # cos
   sampler:
     batch_shuffle: false
-    batch_size: 1
+    batch_size: 6
     sample_type: all_ordered
     frames_all_limit: 720
   transform:
@@ -39,8 +38,8 @@ model_cfg:
     in_channels: 1
     layers:
       - 1
-      - 4
-      - 4
+      - 1
+      - 1
       - 1
     channels: 
       - 64
@@ -48,10 +47,9 @@ model_cfg:
       - 256
       - 512
   SeparateBNNecks:
-    class_num: 3000
-  Gen:
-    channel: 256  #normal encoder
-    # channel: 512 # slim encoder
+    class_num: 74
+  Transformer:
+    channel: 512 # slim encoder
     hidden: 512
     stack_num: 2
     num_head: 2
@@ -69,8 +67,9 @@ model_cfg:
       - 16
       - 11
 
+
 optimizer_cfg:
-  lr: 0.0003
+  lr: 0.0002
   betas:
     - 0
     - 0.99
@@ -80,25 +79,24 @@ optimizer_cfg:
 scheduler_cfg:
   gamma: 0.1
   milestones: # Learning Rate Reduction at each milestones
-    - 60000
-    - 80000
-    - 100000
+    - 35000
+    - 50000
   scheduler: MultiStepLR
 
 trainer_cfg:
   enable_float16: true # half_percesion float for memory reduction and speedup
-  with_test: true
+  with_test: false
   log_iter: 100
   restore_ckpt_strict: false
   restore_hint: 0
   sync_BN: true
   save_iter: 10000
-  save_name: FuseGait_Gait3D_TTTTT
+  save_name: FuseGait_10_official_CASIAB
   total_iter: 60000
   sampler:
     batch_shuffle: false
     batch_size:
-      - 8 # TripletSampler, batch_size[0] indicates Number of Identity
+      - 16 # TripletSampler, batch_size[0] indicates Number of Identity
       - 4 #                 batch_size[1] indicates Samples sequqnce for each Identity
     # frames_num_fixed: 30
     # frames_skip_num: 0
@@ -109,10 +107,4 @@ trainer_cfg:
     frames_skip_num: 4
     type: TripletSampler
   transform:
-    - type: Compose
-      trf_cfg:
-        - type: RandomPerspective
-          prob: 0.2
-        - type: BaseSilCuttingTransform
-        - type: RandomHorizontalFlip
-          prob: 0.2 
+    - type: BaseSilCuttingTransform

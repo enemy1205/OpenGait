@@ -9,13 +9,13 @@ data_cfg:
 evaluator_cfg:
   enable_float16: true
   restore_ckpt_strict: true
-  restore_hint: 180000
-  save_name: FuseGait_Gait3D_ADD_22DPV2
+  restore_hint: 0
+  save_name: FuseGait_V2_Gait3D_Ablation
   eval_func: evaluate_Gait3D
   metric: euc # cos
   sampler:
     batch_shuffle: false
-    batch_size: 1
+    batch_size: 4
     sample_type: all_ordered
     frames_all_limit: 720
   transform:
@@ -33,14 +33,14 @@ loss_cfg:
     log_accuracy: true
 
 model_cfg:
-  model: OrinFuseGait
+  model: FuseGait_Ablation
   Backbone:
     mode: p3d
     in_channels: 1
     layers:
       - 1
-      - 4
-      - 4
+      - 2
+      - 2
       - 1
     channels: 
       - 64
@@ -49,28 +49,9 @@ model_cfg:
       - 512
   SeparateBNNecks:
     class_num: 3000
-  Transformer:
-    # channel: 256  #normal encoder
-    channel: 512 # slim encoder
-    hidden: 512
-    stack_num: 2
-    num_head: 2
-    dropout: 0.
-    kernel_size:
-      - 3
-      - 3
-    padding:
-      - 3
-      - 3
-    stride:
-      - 3
-      - 3
-    output_size:
-      - 16
-      - 11
 
 optimizer_cfg:
-  lr: 0.01
+  lr: 0.1
   momentum: 0.9
   solver: SGD
   weight_decay: 0.0005
@@ -78,9 +59,9 @@ optimizer_cfg:
 scheduler_cfg:
   gamma: 0.1
   milestones: # Learning Rate Reduction at each milestones
-    - 60000
-    - 90000
-    - 140000
+    - 20000
+    - 40000
+    - 50000
   scheduler: MultiStepLR
 
 trainer_cfg:
@@ -92,13 +73,13 @@ trainer_cfg:
   optimizer_reset: false
   scheduler_reset: false
   sync_BN: true
-  save_iter: 30000
-  save_name: FuseGait_Gait3D_ADD_22DPV2
-  total_iter: 180000
+  save_iter: 20000
+  save_name: FuseGait_V2_Gait3D_Ablation
+  total_iter: 60000
   sampler:
     batch_shuffle: false
     batch_size:
-      - 6 # TripletSampler, batch_size[0] indicates Number of Identity
+      - 16 # TripletSampler, batch_size[0] indicates Number of Identity
       - 4 #                 batch_size[1] indicates Samples sequqnce for each Identity
     # frames_num_fixed: 30
     # frames_skip_num: 0

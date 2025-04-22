@@ -1,8 +1,16 @@
 # # **************** For CASIA-B ****************
 # # Baseline
 # CUDA_VISIBLE_DEVICES=0 python opengait/main_re.py --cfgs configs/deepgaitv2/DeepGaitV2_oumvlp.yaml --phase test
-CUDA_VISIBLE_DEVICES=1,2 torchrun --nproc_per_node=2 opengait/main_multi.py --cfgs configs/deepgaitv2/DeepGaitV2_casiab.yaml --phase test
-# CUDA_VISIBLE_DEVICES=0 python opengait/main_single_3.py --cfgs configs/deepgaitv2/DeepGaitV2_casiab.yaml --phase test
+# CUDA_VISIBLE_DEVICES=1,2 torchrun --nproc_per_node=2 opengait/main_multi.py --cfg configs/deepgaitv2/DeepGaitV2_atten_gait3d.yaml --phase test
+# CUDA_VISIBLE_DEVICES=2 python opengait/main_single_3.py --cfgs configs/snngait/snngait_Gait3D.yaml --phase test
+CUDA_VISIBLE_DEVICES=1 python opengait/main_single_2.py --cfgs configs/deepgaitv2/DeepGaitV2_atten_gait3d.yaml --phase test
+# CUDA_VISIBLE_DEVICES=1,2 python -m torch.distributed.launch --nproc_per_node=2 --master_port=25641 opengait/main_multi_2.py --cfgs configs/gaitfuse/fusegait_casiab.yaml --phase test
+
+
+# CUDA_VISIBLE_DEVICES=1 python opengait/main_single_2.py --cfgs configs/gaitrec_fformer/fformergait_casiab_wodis.yaml --phase test
+
+# CUDA_VISIBLE_DEVICES=2 python opengait/main_single_4.py --cfgs configs/gaitrec_fformer/fformergait_casiab_wodis.yaml --phase test
+
 # # GaitSet
 # CUDA_VISIBLE_DEVICES=0,1 python -m torch.distributed.launch --nproc_per_node=2 opengait/main.py --cfgs ./configs/gaitset/gaitset.yaml --phase test
 

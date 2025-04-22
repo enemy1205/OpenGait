@@ -1,28 +1,41 @@
 data_cfg:
-  dataset_name: Gait3D
-  dataset_root: /home/sp/datasets/Gait3D/2D_Silhouettes_64x64_pkl
-  dataset_partition: ./datasets/Gait3D/Gait3D.json
-  num_workers: 4
+  dataset_name: CASIA-B
+  dataset_root: /home/sp/datasets/CASIA_B/official/GaitDatasetB-silh_pkl
+  dataset_partition: ./datasets/CASIA-B/CASIA-B.json
+  num_workers: 8
   remove_no_gallery: false # Remove probe if no gallery for it
-  test_dataset_name: Gait3D
+  test_dataset_name: CASIA-B
+
 
 evaluator_cfg:
   enable_float16: true
   restore_ckpt_strict: true
   restore_hint: 0
-  save_name: SwinGait3D_B1442_C2
+  save_name: FFormerSwinGait_REC
   sampler:
     batch_shuffle: false
-    batch_size: 3
+    batch_size: 4
     sample_type: all_ordered # all indicates whole sequence used to test, while ordered means input sequence by its natural order; Other options:   fixed_unordered
     frames_all_limit: 720 # limit the number of sampled frames to prevent out of memory
-  eval_func: evaluate_Gait3D
   metric: euc # cos
   transform:
-    - type: BaseSilTransform
+    - type: BaseSilCuttingTransform
+    - type: BaseSilCuttingTransform
 
 loss_cfg:
-  - loss_term_weight: 1.0
+  - loss_term_weight: 1
+    type: AdversarialLoss
+    log_prefix: adv
+  - loss_term_weight: 1
+    type: GanLoss
+    log_prefix: gan
+    imgloss_type: 'L1'
+    adversarial_weight: 1
+    img_weight: 100
+  # - loss_term_weight: 5
+  #   type: EdgeLoss
+  #   log_prefix: edge
+  - loss_term_weight: 1
     margin: 0.2
     type: TripletLoss
     log_prefix: triplet
@@ -31,16 +44,17 @@ loss_cfg:
     type: CrossEntropyLoss
     log_prefix: softmax
     log_accuracy: true
+    
 
 model_cfg:
-  model: SwinGait
+  model: FFormerSwinGait
   Backbone:
     mode: p3d
     in_channels: 1
     layers:
       - 1
-      - 4
-      - 4
+      - 2
+      - 2
       - 2
     channels:
       - 64
@@ -48,9 +62,30 @@ model_cfg:
   bin_num: 
     - 15
   SeparateBNNecks:
-    in_channels: 256
-    class_num: 3000
+    in_channels: 128
+    class_num: 74
     parts_num: 16
+  ss_channel: 256  #normal encoder
+  hidden: 256
+  stack_num: 2
+  num_head: 2
+  dropout: 0.
+  kernel_size:
+    - 3
+    - 3
+  padding:
+    - 3
+    - 3
+  stride:
+    - 3
+    - 3
+  output_size:
+    - 32
+    - 22
+  Dis:
+    input_c: 1
+    hidden_size: 32
+    use_sigmoid: True
 
 optimizer_cfg:
   lr: 0.0003
@@ -67,32 +102,26 @@ trainer_cfg:
   enable_float16: true # half_percesion float for memory reduction and speedup
   fix_BN: false
   log_iter: 100
-  with_test: true
+  with_test: True
   optimizer_reset: True
   restore_ckpt_strict: false
-  restore_hint: ./output/Gait3D/DeepGaitV2/DeepGaitV2_B1441_C2_P3D/checkpoints/DeepGaitV2_B1441_C2_P3D-60000.pt
+  restore_hint: 0
   save_iter: 20000
-  save_name: SwinGait3D_B1442_C2
+  save_name: FFormerSwinGait_REC
   sync_BN: true
-  T_max_iter: 60000
-  total_iter: 80000
+  T_max_iter: 40000
+  total_iter: 60000
   sampler:
     batch_shuffle: true
     batch_size:
-      - 15 # TripletSampler, batch_size[0] indicates Number of Identity
+      - 8 # TripletSampler, batch_size[0] indicates Number of Identity
       - 4 #                 batch_size[1] indicates Samples sequqnce for each Identity
     frames_num_fixed: 30 # fixed frames number for training
     frames_skip_num: 4
     sample_type: fixed_ordered # fixed control input frames number, unordered for controlling order of input tensor; Other options: unfixed_ordered or all_ordered
     type: TripletSampler
   transform:
-    - type: Compose
-      trf_cfg:
-        - type: RandomPerspective
-          prob: 0.2
-        - type: BaseSilTransform
-        - type: RandomHorizontalFlip
-          prob: 0.2
-        - type: RandomRotate
-          prob: 0.2
+    - type: BaseSilCuttingTransform
+    - type: BaseSilCuttingTransform
+
 

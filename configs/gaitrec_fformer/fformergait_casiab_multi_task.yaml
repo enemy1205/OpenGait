@@ -10,11 +10,11 @@ evaluator_cfg:
   enable_float16: true
   restore_ckpt_strict: true
   restore_hint: 0
-  save_name: FFormerGait_Edge_WODis_official
+  save_name: FFormerGait_Multi_task_official_wodis
   metric: euc # cos
   sampler:
     batch_shuffle: false
-    batch_size: 8
+    batch_size: 4
     sample_type: all_ordered
     frames_all_limit: 720
   transform:
@@ -22,6 +22,9 @@ evaluator_cfg:
     - type: BaseSilCuttingTransform
 
 loss_cfg:
+  # - loss_term_weight: 1
+  #   type: AdversarialLoss
+  #   log_prefix: adv
   - loss_term_weight: 1
     type: GanLoss
     log_prefix: gan
@@ -42,7 +45,7 @@ loss_cfg:
     log_accuracy: true
 
 model_cfg:
-  model: FFormerGait_WODis
+  model: FFormerGait_MultiTask
   Backbone:
     mode: p3d
     in_channels: 1
@@ -76,6 +79,10 @@ model_cfg:
   output_size:
     - 16
     - 11
+  Dis:
+    input_c: 1
+    hidden_size: 32
+    use_sigmoid: True
 
 
 optimizer_cfg:
@@ -108,8 +115,8 @@ trainer_cfg:
   scheduler_reset: true
   sync_BN: true
   save_iter: 10000
-  save_name: FFormerGait_Edge_WODis_official
-  total_iter: 80000
+  save_name: FFormerGait_Multi_task_official_wodis
+  total_iter: 60000
   sampler:
     batch_shuffle: false
     batch_size:

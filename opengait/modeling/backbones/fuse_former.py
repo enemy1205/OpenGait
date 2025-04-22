@@ -10,6 +10,59 @@ import torch.nn.functional as F
 import torchvision.models as models
 from .spectral_norm import spectral_norm as _spectral_norm
 
+class EncoderNorm(nn.Module):
+    def __init__(self):
+        super(EncoderNorm, self).__init__()
+        self.group = [1, 2, 4, 8, 1]
+        self.layers = nn.ModuleList([
+            nn.Conv2d(1, 64, kernel_size=3, stride=2, padding=1),
+            nn.BatchNorm2d(64),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(64),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1),
+            nn.BatchNorm2d(128),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(128, 256 , kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(256),
+            nn.LeakyReLU(0.2, inplace=True),
+            # i=8情况,此处输出out被记录为x0 torch.Size([120, 256, 16, 11])
+            nn.Conv2d(256, 384, kernel_size=3, stride=1, padding=1, groups=1),
+            nn.BatchNorm2d(384),
+            nn.LeakyReLU(0.2, inplace=True),
+            # 640 = 256(x0)+384(上层输出)
+            nn.Conv2d(640, 512, kernel_size=3, stride=1, padding=1, groups=2),
+            nn.BatchNorm2d(512),
+            nn.LeakyReLU(0.2, inplace=True),
+            # 768 = 256(x0)+512(上层输出)
+            nn.Conv2d(768, 384, kernel_size=3, stride=1, padding=1, groups=4),
+            nn.BatchNorm2d(384),
+            nn.LeakyReLU(0.2, inplace=True),
+            # 640 = 256(x0)+384(上层输出)
+            nn.Conv2d(640, 256, kernel_size=3, stride=1, padding=1, groups=8),
+            nn.BatchNorm2d(256),
+            nn.LeakyReLU(0.2, inplace=True),
+            # 512 = 256(x0)+256(上层输出)
+            nn.Conv2d(512, 256, kernel_size=3, stride=1, padding=1, groups=1),
+            nn.BatchNorm2d(256),
+            nn.LeakyReLU(0.2, inplace=True)
+        ])
+
+    def forward(self, x):
+        bt, c, h, w = x.size()
+        h, w = h//4, w//4
+        out = x
+        for i, layer in enumerate(self.layers):
+            if i == 12:
+                x0 = out
+            if i > 12 and i % 3 == 0:
+                g = self.group[(i - 12) // 3]
+                x = x0.view(bt, g, -1, h, w)
+                o = out.view(bt, g, -1, h, w)
+                out = torch.cat([x, o], 2).view(bt, -1, h, w)
+            out = layer(out)
+        return out
 
 class Encoder(nn.Module):
     def __init__(self):
@@ -333,9 +386,9 @@ class Discriminator(nn.Module):
             spectral_norm(nn.Conv3d(nf * 4, nf * 4, kernel_size=(3, 5, 5), stride=(1, 2, 2),
                                     padding=(1, 2, 2), bias=not use_spectral_norm), use_spectral_norm),
             # nn.InstanceNorm2d(256, track_running_stats=False),
-            nn.LeakyReLU(0.2, inplace=True),
-            spectral_norm(nn.Conv3d(nf * 4, nf * 4, kernel_size=(3, 5, 5), stride=(1, 2, 2),
-                                    padding=(1, 2, 2), bias=not use_spectral_norm), use_spectral_norm),
+            # nn.LeakyReLU(0.2, inplace=True),
+            # spectral_norm(nn.Conv3d(nf * 4, nf * 4, kernel_size=(3, 5, 5), stride=(1, 2, 2),
+            #                         padding=(1, 2, 2), bias=not use_spectral_norm), use_spectral_norm),
             # nn.InstanceNorm2d(256, track_running_stats=False),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Conv3d(nf * 4, nf * 4, kernel_size=(3, 5, 5),

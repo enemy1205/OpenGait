@@ -1,6 +1,6 @@
 data_cfg:
   dataset_name: CASIA-B
-  dataset_root: /home/sp/datasets/CASIA_B/Yolov8Seg/pkl/Silhouette_occ_pkl
+  dataset_root: /home/sp/datasets/CASIA_B/official/GaitDatasetB-silh_pkl
   num_workers: 12
   remove_no_gallery: false
   test_dataset_name: CASIA-B
@@ -9,14 +9,18 @@ evaluator_cfg:
   enable_float16: false
   restore_ckpt_strict: true
   restore_hint: 0
-  save_name: GaitSet_OFFICIAL_NEW_OCC
+  save_name: GaitSet_OFFICIAL_NORMAL
   sampler:
-    batch_size: 16
+    batch_size: 8
     sample_type: all_ordered
     type: InferenceSampler
   metric: euc # cos
   transform:
-    - type: BaseSilTransform
+    - type: Compose
+      trf_cfg:
+        - type: BaseSilTransform
+        - type: RandomErasing
+          prob: 0.2
 
 loss_cfg:
   loss_term_weight: 1.0
@@ -63,7 +67,7 @@ trainer_cfg:
   restore_ckpt_strict: true
   restore_hint: 0
   save_iter: 10000
-  save_name: GaitSet_OFFICIAL_NEW_OCC
+  save_name: GaitSet_OFFICIAL_NORMAL
   sync_BN: false
   total_iter: 40000
   sampler:

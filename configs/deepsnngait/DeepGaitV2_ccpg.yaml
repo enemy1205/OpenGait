@@ -1,25 +1,26 @@
 data_cfg:
-  dataset_name: Gait3D
-  dataset_root: /home/sp/datasets/Gait3D/2D_Silhouettes_64x64_pkl
-  dataset_partition: ./datasets/Gait3D/Gait3D.json
-  num_workers: 4
+  dataset_name: CCPG
+  dataset_root: your_path
+  dataset_partition: ./datasets/CCPG/CCPG.json
+  num_workers: 1
+  data_in_use: [True, False, False, False]
   remove_no_gallery: false # Remove probe if no gallery for it
-  test_dataset_name: Gait3D
+  test_dataset_name: CCPG
 
 evaluator_cfg:
   enable_float16: true
   restore_ckpt_strict: true
-  restore_hint: 0
-  save_name: SwinGait3D_B1442_C2
+  restore_hint: 60000
+  save_name: DeepGaitV2
   sampler:
     batch_shuffle: false
-    batch_size: 3
+    batch_size: 4
     sample_type: all_ordered # all indicates whole sequence used to test, while ordered means input sequence by its natural order; Other options:   fixed_unordered
     frames_all_limit: 720 # limit the number of sampled frames to prevent out of memory
-  eval_func: evaluate_Gait3D
+  eval_func: evaluate_CCPG
   metric: euc # cos
   transform:
-    - type: BaseSilTransform
+    - type: BaseSilCuttingTransform
 
 loss_cfg:
   - loss_term_weight: 1.0
@@ -33,54 +34,53 @@ loss_cfg:
     log_accuracy: true
 
 model_cfg:
-  model: SwinGait
+  model: DeepGaitV2
   Backbone:
     mode: p3d
     in_channels: 1
     layers:
       - 1
-      - 4
-      - 4
-      - 2
-    channels:
+      - 1
+      - 1
+      - 1
+    channels: 
       - 64
-      - 128
-  bin_num: 
-    - 15
+      - 128 
+      - 256
+      - 512
   SeparateBNNecks:
-    in_channels: 256
-    class_num: 3000
-    parts_num: 16
+    class_num: 100
 
 optimizer_cfg:
-  lr: 0.0003
-  solver: AdamW
-  weight_decay: 0.02
+  lr: 0.1
+  momentum: 0.9
+  solver: SGD
+  weight_decay: 0.0005
 
 scheduler_cfg:
   gamma: 0.1
   milestones: # Learning Rate Reduction at each milestones
-    - 100000000
+    - 20000
+    - 40000
+    - 50000
   scheduler: MultiStepLR
 
 trainer_cfg:
   enable_float16: true # half_percesion float for memory reduction and speedup
   fix_BN: false
   log_iter: 100
-  with_test: true
-  optimizer_reset: True
-  restore_ckpt_strict: false
-  restore_hint: ./output/Gait3D/DeepGaitV2/DeepGaitV2_B1441_C2_P3D/checkpoints/DeepGaitV2_B1441_C2_P3D-60000.pt
-  save_iter: 20000
-  save_name: SwinGait3D_B1442_C2
+  with_test: false
+  restore_ckpt_strict: true
+  restore_hint: 0
+  save_iter: 30000
+  save_name: DeepGaitV2
   sync_BN: true
-  T_max_iter: 60000
-  total_iter: 80000
+  total_iter: 60000
   sampler:
     batch_shuffle: true
     batch_size:
-      - 15 # TripletSampler, batch_size[0] indicates Number of Identity
-      - 4 #                 batch_size[1] indicates Samples sequqnce for each Identity
+      - 8 # TripletSampler, batch_size[0] indicates Number of Identity
+      - 16 #                 batch_size[1] indicates Samples sequqnce for each Identity
     frames_num_fixed: 30 # fixed frames number for training
     frames_skip_num: 4
     sample_type: fixed_ordered # fixed control input frames number, unordered for controlling order of input tensor; Other options: unfixed_ordered or all_ordered
@@ -90,9 +90,8 @@ trainer_cfg:
       trf_cfg:
         - type: RandomPerspective
           prob: 0.2
-        - type: BaseSilTransform
+        - type: BaseSilCuttingTransform
         - type: RandomHorizontalFlip
           prob: 0.2
         - type: RandomRotate
           prob: 0.2
-

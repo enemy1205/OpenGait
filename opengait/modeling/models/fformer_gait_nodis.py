@@ -195,8 +195,7 @@ class FFormerGait_WODis(BaseModel):
             }
             }
         else:
-            gt_sils = gt_sils.view(b*t, c, h, w)
-            enc_feat = self.encoder(gt_sils)        
+            enc_feat = self.encoder(occ_sils.view(b * t, c, h, w))      
             trans_feat = self.ss(enc_feat, b)
             trans_feat = self.add_pos_emb(trans_feat)
             trans_feat = self.transformer(trans_feat)
@@ -220,7 +219,7 @@ class FFormerGait_WODis(BaseModel):
             embed = embed_1
             retval = {
             'visual_summary': {
-                'image/gt_sils': gt_sils, 'image/occ_sils': occ_sils.view(b*t, c, h, w), "image/rec_sils": rec_sil.view(b*t, c, h, w)            
+                'image/gt_sils': gt_sils.view(b*t, c, h, w), 'image/occ_sils': occ_sils.view(b*t, c, h, w), "image/rec_sils": rec_sil.view(b*t, c, h, w)            
             },
             'inference_feat': {
                 'embeddings': embed

@@ -61,7 +61,7 @@ model_cfg:
     SeparateBNNecks:
       class_num: 74
   Gen:
-    channel: 256  #normal encoder
+    channel: 512  #normal encoder
     # channel: 512 # slim encoder
     hidden: 512
     stack_num: 2

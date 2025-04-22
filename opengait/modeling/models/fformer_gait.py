@@ -212,25 +212,7 @@ class FFormerGait(BaseModel):
                 )
         optimizer = optimizer(params_list,**valid_arg)
         return optimizer
-    # def finetune_parameters(self):
-    #     dis_tune_params = list()
-    #     others_params = list()
-    #     for name, p in self.named_parameters():
-    #         if not p.requires_grad:
-    #             continue
-    #         if 'dis' in name:
-    #             dis_tune_params.append(p)
-    #         else:
-    #             others_params.append(p)
-    #     return [{'params': dis_tune_params, 'lr': self.dis_lr},{'params': others_params}]
-
-    # def get_optimizer(self, optimizer_cfg):
-    #     self.msg_mgr.log_info(optimizer_cfg)
-    #     optimizer = get_attr_from([optim], optimizer_cfg['solver'])
-    #     valid_arg = get_valid_args(optimizer, optimizer_cfg, ['solver'])
-    #     optimizer = optimizer(self.finetune_parameters(), **valid_arg)
-    #     return optimizer
-
+    
     def forward(self, inputs):
         ipts, labs, _, _, seqL = inputs
         # ipts[0 or 1] : [b,t,h,w]
@@ -252,7 +234,7 @@ class FFormerGait(BaseModel):
         rec_out0 = self.layer0(rec_sil.view(b,c,t,h,w)) # [b,64,t,h,w]
         rec_out1 = self.layer1(rec_out0) # [b,64,t,h,w]
         rec_out2 = self.layer2(rec_out1) # [b,128,t,h/2,w/2]
-        rec_out3 = self.layer3(rec_out2) # [b,256,t,h/2,w/2]
+        rec_out3 = self.layer3(rec_out2) # [b,256,t,h/4,w/4]
         rec_out4 = self.layer4(rec_out3) # [b,512,t,h/4,w/4]
         # enc_feat = self.feature_transform(enc_feat).view(b, -1, t, h//4, w//4)
         # Temporal Pooling, TP

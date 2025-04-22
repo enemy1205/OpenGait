@@ -10,7 +10,6 @@ import os.path as osp
 import numpy as np
 import cv2
 import os
-import os.path as osp
 from ..base_model import BaseModel
 from ..modules import SeparateFCs, BasicConv3d, PackSequenceWrapper, SeparateBNNecks
 from ..backbones.LG_Modules import CorrBlock

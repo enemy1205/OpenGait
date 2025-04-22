@@ -810,7 +810,7 @@ class SwinGait(BaseModel):
             in_chans = channels[1], 
             embed_dim = 256, 
             depths = [layers[2], layers[3]], 
-            num_heads = [16, 32], 
+            num_heads = [16, 32],                              
             window_size = [3, 3, 5], 
             downsample = [1, 0], 
             drop_path_rate = 0.1, 
@@ -896,9 +896,9 @@ class SwinGait(BaseModel):
 
         del ipts
 
-        out0 = self.layer0(sils)
-        out1 = self.layer1(out0)
-        out2 = self.layer2(out1) # [n, c, s, h, w]
+        out0 = self.layer0(sils)  # [n, 64, s, h, w]
+        out1 = self.layer1(out0)   # [n, 64, s, h, w]
+        out2 = self.layer2(out1) # [n, 128, s, h//2, w//2]
         out2 = self.ulayer(out2)
         out4 = self.transformer(out2) # [n, 768, s/4, 4, 3]
 

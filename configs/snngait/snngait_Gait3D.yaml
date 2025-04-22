@@ -10,7 +10,7 @@ evaluator_cfg:
   enable_float16: true
   restore_ckpt_strict: true
   restore_hint: 0
-  save_name: SNNGait3D
+  save_name: SwinSnnGait
   sampler:
     batch_shuffle: false
     batch_size: 4
@@ -33,34 +33,36 @@ loss_cfg:
     log_accuracy: true
 
 model_cfg:
-  model: SNNGait
-  Backbone:
-    mode: p3d
-    in_channels: 1
-    layers:
-      - 1
-      - 4
-      - 4
-      - 2
-    channels:
-      - 64
-      - 128
-  bin_num: 
-    - 16
+  model: SwinSnnGait
+  in_channels: 1
+  channels: 
+    - 64
+    - 128 
+    - 256
+    - 512
   SeparateBNNecks:
-    in_channels: 256
     class_num: 3000
-    parts_num: 17
+  # use_emb2:
 
 optimizer_cfg:
-  lr: 0.0005
-  solver: AdamW
-  weight_decay: 0.05
+  lr: 0.001
+  betas:
+    - 0
+    - 0.99
+  solver: Adam
+  weight_decay: 0.0005
+# optimizer_cfg:
+#   lr: 0.1
+#   momentum: 0.9
+#   solver: SGD
+#   weight_decay: 0.0005
 
 scheduler_cfg:
   gamma: 0.1
   milestones: # Learning Rate Reduction at each milestones
-    - 100000000
+    - 20000
+    - 40000
+    - 50000
   scheduler: MultiStepLR
 
 trainer_cfg:
@@ -71,16 +73,15 @@ trainer_cfg:
   optimizer_reset: true
   restore_ckpt_strict: false
   restore_hint: 0
-  save_iter: 20000
-  save_name: SNNGait3D_TEST
+  save_iter: 10000
+  save_name: SwinSnnGait
   sync_BN: true
-  T_max_iter: 60000
-  total_iter: 80000
+  total_iter: 60000
   sampler:
     batch_shuffle: true
     batch_size:
-      - 2 # TripletSampler, batch_size[0] indicates Number of Identity
-      - 2 #                 batch_size[1] indicates Samples sequqnce for each Identity
+      - 8 # TripletSampler, batch_size[0] indicates Number of Identity
+      - 4 #                 batch_size[1] indicates Samples sequqnce for each Identity
     frames_num_fixed: 30 # fixed frames number for training
     frames_skip_num: 4
     sample_type: fixed_ordered # fixed control input frames number, unordered for controlling order of input tensor; Other options: unfixed_ordered or all_ordered

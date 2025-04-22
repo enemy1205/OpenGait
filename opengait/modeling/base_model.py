@@ -34,6 +34,7 @@ from utils import get_valid_args, is_list, is_dict, np2var, ts2np, list2var, get
 from evaluation import evaluator as eval_functions
 from utils import NoOp
 from utils import get_msg_mgr
+from spikingjelly.clock_driven import functional
 
 __all__ = ['BaseModel']
 
@@ -216,8 +217,8 @@ class BaseModel(MetaModel, nn.Module):
 
     def get_loader(self, data_cfg, train=True):
         sampler_cfg = self.cfgs['trainer_cfg']['sampler'] if train else self.cfgs['evaluator_cfg']['sampler']
-        # dataset = DataSet(data_cfg, train)
-        dataset = OcclusionDataSet(data_cfg, train)
+        dataset = DataSet(data_cfg, train)
+        # dataset = OcclusionDataSet(data_cfg, train)
         Sampler = get_attr_from([Samplers], sampler_cfg['type'])
         vaild_args = get_valid_args(Sampler, sampler_cfg, free_keys=[
             'sample_type', 'type'])
@@ -340,6 +341,7 @@ class BaseModel(MetaModel, nn.Module):
             ipts = seqs
         del seqs
         return ipts, labs, typs, vies, seqL
+    
 
     def train_step(self, loss_sum) -> bool:
         """Conduct loss_sum.backward(), self.optimizer.step() and self.scheduler.step().
@@ -354,7 +356,7 @@ class BaseModel(MetaModel, nn.Module):
         if loss_sum <= 1e-9:
             self.msg_mgr.log_warning(
                 "Find the loss sum less than 1e-9 but the training process will continue!")
-
+        # functional.reset_net(self.Backbone)
         if self.engine_cfg['enable_float16']:
             self.Scaler.scale(loss_sum).backward()
             self.Scaler.step(self.optimizer)
