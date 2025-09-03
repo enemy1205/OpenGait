@@ -4,7 +4,7 @@ import torch.nn as nn
 
 
 def bilinear_sampler(img, coords, mask=False):
-    """ Wrapper for grid_sample, uses pixel coordinates """
+    """Wrapper for grid_sample, uses pixel coordinates"""
     H, W = img.shape[-2:]
     xgrid, ygrid = coords.split([1, 1], dim=-1)
     xgrid = 2 * xgrid / (W - 1) - 1
@@ -41,8 +41,9 @@ class CorrBlock(nn.Module):
         super(CorrBlock, self).__init__()
         self.num_levels = num_levels
         self.radius = radius
-        self.fc1 = nn.Conv2d(input_dim, input_dim // 2, kernel_size=1,
-                             bias=False)  # nn.Linear(input_dim,input_dim//4,bias=False)
+        self.fc1 = nn.Conv2d(
+            input_dim, input_dim // 2, kernel_size=1, bias=False
+        )  # nn.Linear(input_dim,input_dim//4,bias=False)
         self.fc0 = nn.Conv2d(input_dim, input_dim // 2, kernel_size=1, bias=False)
 
     def forward(self, x):
@@ -69,7 +70,6 @@ class CorrBlock(nn.Module):
 
         b, c, h, w = f0.shape
 
-
         coords = coords_grid(b, h, w).to(device)
         coords = coords.permute(0, 2, 3, 1).contiguous()
 
@@ -94,7 +94,7 @@ class CorrBlock(nn.Module):
             # print(delta)
             # print(coords.shape)
             # print(b,h,w)
-            centroid_lvl = coords.reshape(b * h * w, 1, 1, 2) / (2 ** i)
+            centroid_lvl = coords.reshape(b * h * w, 1, 1, 2) / (2**i)
             # centroid_lvl = coords.view(b*h*w, 1, 1, 2) / (2**i)
             # print(centroid_lvl)
             delta_lvl = delta.view(1, 2 * r + 1, 2 * r + 1, 2)

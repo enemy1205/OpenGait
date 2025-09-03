@@ -4,40 +4,49 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from ..base_model import BaseModel
-from ..modules import SeparateFCs, BasicConv2d, SetBlockWrapper, HorizontalPoolingPyramid, PackSequenceWrapper
+from ..modules import (
+    SeparateFCs,
+    BasicConv2d,
+    SetBlockWrapper,
+    HorizontalPoolingPyramid,
+    PackSequenceWrapper,
+)
 
 
 class GLN(BaseModel):
     """
-        http://home.ustc.edu.cn/~saihui/papers/eccv2020_gln.pdf
-        Gait Lateral Network: Learning Discriminative and Compact Representations for Gait Recognition
+    http://home.ustc.edu.cn/~saihui/papers/eccv2020_gln.pdf
+    Gait Lateral Network: Learning Discriminative and Compact Representations for Gait Recognition
     """
 
     def build_network(self, model_cfg):
-        in_channels = model_cfg['in_channels']
-        self.bin_num = model_cfg['bin_num']
-        self.hidden_dim = model_cfg['hidden_dim']
-        lateral_dim = model_cfg['lateral_dim']
+        in_channels = model_cfg["in_channels"]
+        self.bin_num = model_cfg["bin_num"]
+        self.hidden_dim = model_cfg["hidden_dim"]
+        lateral_dim = model_cfg["lateral_dim"]
         reduce_dim = self.hidden_dim
-        self.pretrain = model_cfg['Lateral_pretraining']
+        self.pretrain = model_cfg["Lateral_pretraining"]
 
-        self.sil_stage_0 = nn.Sequential(BasicConv2d(in_channels[0], in_channels[1], 5, 1, 2),
-                                         nn.LeakyReLU(inplace=True),
-                                         BasicConv2d(
-                                             in_channels[1], in_channels[1], 3, 1, 1),
-                                         nn.LeakyReLU(inplace=True))
+        self.sil_stage_0 = nn.Sequential(
+            BasicConv2d(in_channels[0], in_channels[1], 5, 1, 2),
+            nn.LeakyReLU(inplace=True),
+            BasicConv2d(in_channels[1], in_channels[1], 3, 1, 1),
+            nn.LeakyReLU(inplace=True),
+        )
 
-        self.sil_stage_1 = nn.Sequential(BasicConv2d(in_channels[1], in_channels[2], 3, 1, 1),
-                                         nn.LeakyReLU(inplace=True),
-                                         BasicConv2d(
-                                             in_channels[2], in_channels[2], 3, 1, 1),
-                                         nn.LeakyReLU(inplace=True))
+        self.sil_stage_1 = nn.Sequential(
+            BasicConv2d(in_channels[1], in_channels[2], 3, 1, 1),
+            nn.LeakyReLU(inplace=True),
+            BasicConv2d(in_channels[2], in_channels[2], 3, 1, 1),
+            nn.LeakyReLU(inplace=True),
+        )
 
-        self.sil_stage_2 = nn.Sequential(BasicConv2d(in_channels[2], in_channels[3], 3, 1, 1),
-                                         nn.LeakyReLU(inplace=True),
-                                         BasicConv2d(
-                                             in_channels[3], in_channels[3], 3, 1, 1),
-                                         nn.LeakyReLU(inplace=True))
+        self.sil_stage_2 = nn.Sequential(
+            BasicConv2d(in_channels[2], in_channels[3], 3, 1, 1),
+            nn.LeakyReLU(inplace=True),
+            BasicConv2d(in_channels[3], in_channels[3], 3, 1, 1),
+            nn.LeakyReLU(inplace=True),
+        )
 
         self.set_stage_1 = copy.deepcopy(self.sil_stage_1)
         self.set_stage_2 = copy.deepcopy(self.sil_stage_2)
@@ -52,37 +61,60 @@ class GLN(BaseModel):
         self.sil_stage_2 = SetBlockWrapper(self.sil_stage_2)
 
         self.lateral_layer1 = nn.Conv2d(
-            in_channels[1]*2, lateral_dim, kernel_size=1, stride=1, padding=0, bias=False)
+            in_channels[1] * 2,
+            lateral_dim,
+            kernel_size=1,
+            stride=1,
+            padding=0,
+            bias=False,
+        )
         self.lateral_layer2 = nn.Conv2d(
-            in_channels[2]*2, lateral_dim, kernel_size=1, stride=1, padding=0, bias=False)
+            in_channels[2] * 2,
+            lateral_dim,
+            kernel_size=1,
+            stride=1,
+            padding=0,
+            bias=False,
+        )
         self.lateral_layer3 = nn.Conv2d(
-            in_channels[3]*2, lateral_dim, kernel_size=1, stride=1, padding=0, bias=False)
+            in_channels[3] * 2,
+            lateral_dim,
+            kernel_size=1,
+            stride=1,
+            padding=0,
+            bias=False,
+        )
 
         self.smooth_layer1 = nn.Conv2d(
-            lateral_dim, lateral_dim, kernel_size=3, stride=1, padding=1, bias=False)
+            lateral_dim, lateral_dim, kernel_size=3, stride=1, padding=1, bias=False
+        )
         self.smooth_layer2 = nn.Conv2d(
-            lateral_dim, lateral_dim, kernel_size=3, stride=1, padding=1, bias=False)
+            lateral_dim, lateral_dim, kernel_size=3, stride=1, padding=1, bias=False
+        )
         self.smooth_layer3 = nn.Conv2d(
-            lateral_dim, lateral_dim, kernel_size=3, stride=1, padding=1, bias=False)
+            lateral_dim, lateral_dim, kernel_size=3, stride=1, padding=1, bias=False
+        )
 
         self.HPP = HorizontalPoolingPyramid()
-        self.Head = SeparateFCs(**model_cfg['SeparateFCs'])
+        self.Head = SeparateFCs(**model_cfg["SeparateFCs"])
 
         if not self.pretrain:
-            self.encoder_bn = nn.BatchNorm1d(sum(self.bin_num)*3*self.hidden_dim)
+            self.encoder_bn = nn.BatchNorm1d(sum(self.bin_num) * 3 * self.hidden_dim)
             self.encoder_bn.bias.requires_grad_(False)
 
-            self.reduce_dp = nn.Dropout(p=model_cfg['dropout'])
+            self.reduce_dp = nn.Dropout(p=model_cfg["dropout"])
             self.reduce_ac = nn.ReLU(inplace=True)
-            self.reduce_fc = nn.Linear(sum(self.bin_num)*3*self.hidden_dim, reduce_dim, bias=False)
+            self.reduce_fc = nn.Linear(
+                sum(self.bin_num) * 3 * self.hidden_dim, reduce_dim, bias=False
+            )
 
             self.reduce_bn = nn.BatchNorm1d(reduce_dim)
             self.reduce_bn.bias.requires_grad_(False)
 
-            self.reduce_cls = nn.Linear(reduce_dim, model_cfg['class_num'], bias=False)
+            self.reduce_cls = nn.Linear(reduce_dim, model_cfg["class_num"], bias=False)
 
     def upsample_add(self, x, y):
-        return F.interpolate(x, scale_factor=2, mode='nearest') + y
+        return F.interpolate(x, scale_factor=2, mode="nearest") + y
 
     def forward(self, inputs):
         ipts, labs, _, _, seqL = inputs
@@ -120,7 +152,7 @@ class GLN(BaseModel):
 
         # print(set1.shape,set2.shape,set3.shape,"***\n")
 
-        # lateral 
+        # lateral
         set3 = self.lateral_layer3(set3)
         set2 = self.upsample_add(set3, self.lateral_layer2(set2))
         set1 = self.upsample_add(set2, self.lateral_layer1(set1))
@@ -153,17 +185,15 @@ class GLN(BaseModel):
             bn_reduce_feature = bn_reduce_feature.unsqueeze(1).contiguous()
 
         retval = {
-            'training_feat': {},
-            'visual_summary': {
-                'image/sils': sils.view(n*s, 1, h, w)
+            "training_feat": {},
+            "visual_summary": {"image/sils": sils.view(n * s, 1, h, w)},
+            "inference_feat": {
+                "embeddings": feature  # reduce_feature # bn_reduce_feature
             },
-            'inference_feat': {
-                'embeddings':  feature  # reduce_feature # bn_reduce_feature
-            }
         }
         if self.pretrain:
-            retval['training_feat']['triplet'] = {'embeddings': feature, 'labels': labs}
+            retval["training_feat"]["triplet"] = {"embeddings": feature, "labels": labs}
         else:
-            retval['training_feat']['triplet'] = {'embeddings': feature, 'labels': labs}
-            retval['training_feat']['softmax'] = {'logits': logits, 'labels': labs}
+            retval["training_feat"]["triplet"] = {"embeddings": feature, "labels": labs}
+            retval["training_feat"]["softmax"] = {"logits": logits, "labels": labs}
         return retval

@@ -138,11 +138,7 @@ class SepConv(nn.Module):
 
 
 class MS_ConvBlock(nn.Module):
-    def __init__(
-        self,
-        input_dim,
-        output_dim
-    ):
+    def __init__(self, input_dim, output_dim):
         super().__init__()
 
         self.Conv = SepConv(dim=input_dim)
@@ -171,7 +167,6 @@ class MS_ConvBlock(nn.Module):
         x = x_feat + x
 
         return x
-
 
 
 class MS_MLP(nn.Module):
@@ -398,7 +393,7 @@ class Spiking_vit_MetaFormer(nn.Module):
         self.ConvBlock1 = nn.ModuleList(
             [MS_ConvBlock(input_dim=embed_dim[0], output_dim=embed_dim[0])]
         )
-        
+
         self.downsample1 = MS_DownSampling(
             in_channels=embed_dim[0],
             embed_dims=embed_dim[1],
@@ -407,11 +402,11 @@ class Spiking_vit_MetaFormer(nn.Module):
             padding=1,
             first_layer=True,
         )
-        
+
         self.ConvBlock2 = nn.ModuleList(
             [MS_ConvBlock(input_dim=embed_dim[1], output_dim=embed_dim[1])]
         )
-        
+
         self.downsample2 = MS_DownSampling(
             in_channels=embed_dim[1],
             embed_dims=embed_dim[2],
@@ -420,7 +415,7 @@ class Spiking_vit_MetaFormer(nn.Module):
             padding=1,
             first_layer=True,
         )
-        
+
         self.block3 = nn.ModuleList(
             [
                 MS_Block(
@@ -439,20 +434,17 @@ class Spiking_vit_MetaFormer(nn.Module):
             ]
         )
 
-
     def forward(self, x):
-        
+
         for blk in self.ConvBlock1:
             x = blk(x)
         x = self.downsample1(x)
-        
+
         for blk in self.ConvBlock2:
             x = blk(x)
         x = self.downsample2(x)
-        
+
         for blk in self.block3:
             x = blk(x)
 
         return x
-
-

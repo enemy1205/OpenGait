@@ -6,14 +6,12 @@ class ConvBlock(nn.Module):
     def __init__(self, ch_in, ch_out):
         super(ConvBlock, self).__init__()
         self.conv = nn.Sequential(
-            nn.Conv2d(ch_in, ch_out, kernel_size=3,
-                      stride=1, padding=1, bias=True),
+            nn.Conv2d(ch_in, ch_out, kernel_size=3, stride=1, padding=1, bias=True),
             nn.BatchNorm2d(ch_out),
             nn.ReLU(inplace=True),
-            nn.Conv2d(ch_out, ch_out, kernel_size=3,
-                      stride=1, padding=1, bias=True),
+            nn.Conv2d(ch_out, ch_out, kernel_size=3, stride=1, padding=1, bias=True),
             nn.BatchNorm2d(ch_out),
-            nn.ReLU(inplace=True)
+            nn.ReLU(inplace=True),
         )
 
     def forward(self, x):
@@ -26,10 +24,9 @@ class UpConv(nn.Module):
         super(UpConv, self).__init__()
         self.up = nn.Sequential(
             nn.Upsample(scale_factor=2),
-            nn.Conv2d(ch_in, ch_out, kernel_size=3,
-                      stride=1, padding=1, bias=True),
+            nn.Conv2d(ch_in, ch_out, kernel_size=3, stride=1, padding=1, bias=True),
             nn.BatchNorm2d(ch_out),
-            nn.ReLU(inplace=True)
+            nn.ReLU(inplace=True),
         )
 
     def forward(self, x):
@@ -65,8 +62,7 @@ class U_Net(nn.Module):
         self.Up2 = UpConv(ch_in=32, ch_out=16)
         self.Up_conv2 = ConvBlock(ch_in=32, ch_out=16)
 
-        self.Conv_1x1 = nn.Conv2d(
-            16, 1, kernel_size=1, stride=1, padding=0)
+        self.Conv_1x1 = nn.Conv2d(16, 1, kernel_size=1, stride=1, padding=0)
 
     def forward(self, x):
         if self.freeze:

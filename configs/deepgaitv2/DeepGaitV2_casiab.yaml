@@ -77,8 +77,8 @@ trainer_cfg:
   sampler:
     batch_shuffle: true
     batch_size:
-      - 8 # TripletSampler, batch_size[0] indicates Number of Identity
-      - 16 #                 batch_size[1] indicates Samples sequqnce for each Identity
+      - 2 # TripletSampler, batch_size[0] indicates Number of Identity
+      - 2 #                 batch_size[1] indicates Samples sequqnce for each Identity
     frames_num_fixed: 30 # fixed frames number for training
     frames_skip_num: 4
     sample_type: fixed_ordered # fixed control input frames number, unordered for controlling order of input tensor; Other options: unfixed_ordered or all_ordered

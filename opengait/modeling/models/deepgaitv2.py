@@ -1,25 +1,17 @@
+import os
+
+import numpy as np
 import torch
 import torch.nn as nn
-
-import os
-import numpy as np
-from ..backbones.sttn import Discriminator
-from ..backbones.simvp import Encoder, Mid_Xnet, Decoder
-from ..base_model import BaseModel
-from ..modules import (
-    SetBlockWrapper,
-    HorizontalPoolingPyramid,
-    PackSequenceWrapper,
-    SeparateFCs,
-    SeparateBNNecks,
-    conv1x1,
-    conv3x3,
-    BasicBlock2D,
-    BasicBlockP3D,
-    BasicBlock3D,
-)
-
 from einops import rearrange
+
+from ..backbones.simvp import Decoder, Encoder, Mid_Xnet
+from ..backbones.sttn import Discriminator
+from ..base_model import BaseModel
+from ..modules import (BasicBlock2D, BasicBlock3D, BasicBlockP3D,
+                       HorizontalPoolingPyramid, PackSequenceWrapper,
+                       SeparateBNNecks, SeparateFCs, SetBlockWrapper, conv1x1,
+                       conv3x3)
 
 blocks_map = {"2d": BasicBlock2D, "p3d": BasicBlockP3D, "3d": BasicBlock3D}
 

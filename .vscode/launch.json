@@ -9,8 +9,9 @@
             "type": "python",
             "request": "launch",
             "program": "${file}",
-            "env": {"CUDA_VISIBLE_DEVICES":"0"},
-            "args": ["--cfgs=configs/deepgaitv2/DeepGaitV2_atten_gait3d.yaml", "--phase=train"],
+            "env": {"CUDA_VISIBLE_DEVICES":"2"},
+            "args": ["--cfgs=configs/videomae/videomae.yaml", "--phase=train"],
+            // "args": ["--cfgs=configs/deepgaitv2/DeepGaitV2_casiab.yaml", "--phase=train"],
             "console": "integratedTerminal",
             "justMyCode": true
         }

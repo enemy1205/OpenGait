@@ -1,1 +1,1 @@
-kill $(ps aux | grep main_multi.py | grep -v grep | awk '{print $2}')
+kill $(ps aux | grep main_single_2.py | grep -v grep | awk '{print $2}')

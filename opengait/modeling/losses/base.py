@@ -7,8 +7,7 @@ from utils import ddp_all_gather
 
 
 def gather_and_scale_wrapper(func):
-    """Internal wrapper: gather the input from multple cards to one card, and scale the loss by the number of cards.
-    """
+    """Internal wrapper: gather the input from multple cards to one card, and scale the loss by the number of cards."""
 
     @functools.wraps(func)
     def inner(*args, **kwds):
@@ -22,6 +21,7 @@ def gather_and_scale_wrapper(func):
             return loss, loss_info
         except:
             raise ArgumentError
+
     return inner
 
 
@@ -47,7 +47,7 @@ class BaseLoss(nn.Module):
         """
         The default forward function.
 
-        This function should be overridden by the subclass. 
+        This function should be overridden by the subclass.
 
         Args:
             logits: the logits of the model.
@@ -56,4 +56,4 @@ class BaseLoss(nn.Module):
         Returns:
             tuple of loss and info.
         """
-        return .0, self.info
+        return 0.0, self.info

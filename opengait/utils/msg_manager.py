@@ -14,7 +14,7 @@ import logging
 class MessageManager:
     def __init__(self):
         self.info_dict = Odict()
-        self.writer_hparams = ['image', 'scalar']
+        self.writer_hparams = ["image", "scalar"]
         self.time = time.time()
 
     def init_manager(self, save_path, log_to_file, log_iter, iteration=0):
@@ -22,20 +22,28 @@ class MessageManager:
         self.log_iter = log_iter
         mkdir(osp.join(save_path, "summary/"))
         self.writer = SummaryWriter(
-            osp.join(save_path, "summary/"), purge_step=self.iteration)
+            osp.join(save_path, "summary/"), purge_step=self.iteration
+        )
         self.init_logger(save_path, log_to_file)
 
     def init_logger(self, save_path, log_to_file):
         # init logger
-        self.logger = logging.getLogger('opengait')
+        self.logger = logging.getLogger("opengait")
         self.logger.setLevel(logging.INFO)
         self.logger.propagate = False
         formatter = logging.Formatter(
-            fmt='[%(asctime)s] [%(levelname)s]: %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+            fmt="[%(asctime)s] [%(levelname)s]: %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
         if log_to_file:
             mkdir(osp.join(save_path, "logs/"))
             vlog = logging.FileHandler(
-                osp.join(save_path, "logs/", strftime('%Y-%m-%d-%H-%M-%S', localtime())+'.txt'))
+                osp.join(
+                    save_path,
+                    "logs/",
+                    strftime("%Y-%m-%d-%H-%M-%S", localtime()) + ".txt",
+                )
+            )
             vlog.setLevel(logging.INFO)
             vlog.setFormatter(formatter)
             self.logger.addHandler(vlog)
@@ -59,17 +67,23 @@ class MessageManager:
     def write_to_tensorboard(self, summary):
 
         for k, v in summary.items():
-            module_name = k.split('/')[0]
+            module_name = k.split("/")[0]
             if module_name not in self.writer_hparams:
                 self.log_warning(
-                    'Not Expected --Summary-- type [{}] appear!!!{}'.format(k, self.writer_hparams))
+                    "Not Expected --Summary-- type [{}] appear!!!{}".format(
+                        k, self.writer_hparams
+                    )
+                )
                 continue
-            board_name = k.replace(module_name + "/", '')
-            writer_module = getattr(self.writer, 'add_' + module_name)
+            board_name = k.replace(module_name + "/", "")
+            writer_module = getattr(self.writer, "add_" + module_name)
             v = v.detach() if is_tensor(v) else v
-            v = vutils.make_grid(
-                v, normalize=True, scale_each=True) if 'image' in module_name else v
-            if module_name == 'scalar':
+            v = (
+                vutils.make_grid(v, normalize=True, scale_each=True)
+                if "image" in module_name
+                else v
+            )
+            if module_name == "scalar":
                 try:
                     v = v.mean()
                 except:
@@ -79,12 +93,13 @@ class MessageManager:
     def log_training_info(self):
         now = time.time()
         string = "Iteration {:0>5}, Cost {:.2f}s".format(
-            self.iteration, now-self.time, end="")
+            self.iteration, now - self.time, end=""
+        )
         for i, (k, v) in enumerate(self.info_dict.items()):
-            if 'scalar' not in k:
+            if "scalar" not in k:
                 continue
-            k = k.replace('scalar/', '').replace('/', '_')
-            end = "\n" if i == len(self.info_dict)-1 else ""
+            k = k.replace("scalar/", "").replace("/", "_")
+            end = "\n" if i == len(self.info_dict) - 1 else ""
             string += ", {0}={1:.4f}".format(k, np.mean(v), end=end)
         self.log_info(string)
         self.reset_time()

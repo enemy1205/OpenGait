@@ -3,34 +3,46 @@ import copy
 import torch.nn as nn
 
 from ..base_model import BaseModel
-from ..modules import SeparateFCs, BasicConv2d, SetBlockWrapper, HorizontalPoolingPyramid, PackSequenceWrapper
+from ..modules import (
+    SeparateFCs,
+    BasicConv2d,
+    SetBlockWrapper,
+    HorizontalPoolingPyramid,
+    PackSequenceWrapper,
+)
 
 
 class GaitSet(BaseModel):
     """
-        GaitSet: Regarding Gait as a Set for Cross-View Gait Recognition
-        Arxiv:  https://arxiv.org/abs/1811.06186
-        Github: https://github.com/AbnerHqC/GaitSet
+    GaitSet: Regarding Gait as a Set for Cross-View Gait Recognition
+    Arxiv:  https://arxiv.org/abs/1811.06186
+    Github: https://github.com/AbnerHqC/GaitSet
     """
 
     def build_network(self, model_cfg):
-        in_c = model_cfg['in_channels']
-        self.set_block1 = nn.Sequential(BasicConv2d(in_c[0], in_c[1], 5, 1, 2),
-                                        nn.LeakyReLU(inplace=True),
-                                        BasicConv2d(in_c[1], in_c[1], 3, 1, 1),
-                                        nn.LeakyReLU(inplace=True),
-                                        nn.MaxPool2d(kernel_size=2, stride=2))
+        in_c = model_cfg["in_channels"]
+        self.set_block1 = nn.Sequential(
+            BasicConv2d(in_c[0], in_c[1], 5, 1, 2),
+            nn.LeakyReLU(inplace=True),
+            BasicConv2d(in_c[1], in_c[1], 3, 1, 1),
+            nn.LeakyReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+        )
 
-        self.set_block2 = nn.Sequential(BasicConv2d(in_c[1], in_c[2], 3, 1, 1),
-                                        nn.LeakyReLU(inplace=True),
-                                        BasicConv2d(in_c[2], in_c[2], 3, 1, 1),
-                                        nn.LeakyReLU(inplace=True),
-                                        nn.MaxPool2d(kernel_size=2, stride=2))
+        self.set_block2 = nn.Sequential(
+            BasicConv2d(in_c[1], in_c[2], 3, 1, 1),
+            nn.LeakyReLU(inplace=True),
+            BasicConv2d(in_c[2], in_c[2], 3, 1, 1),
+            nn.LeakyReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+        )
 
-        self.set_block3 = nn.Sequential(BasicConv2d(in_c[2], in_c[3], 3, 1, 1),
-                                        nn.LeakyReLU(inplace=True),
-                                        BasicConv2d(in_c[3], in_c[3], 3, 1, 1),
-                                        nn.LeakyReLU(inplace=True))
+        self.set_block3 = nn.Sequential(
+            BasicConv2d(in_c[2], in_c[3], 3, 1, 1),
+            nn.LeakyReLU(inplace=True),
+            BasicConv2d(in_c[3], in_c[3], 3, 1, 1),
+            nn.LeakyReLU(inplace=True),
+        )
 
         self.gl_block2 = copy.deepcopy(self.set_block2)
         self.gl_block3 = copy.deepcopy(self.set_block3)
@@ -41,14 +53,14 @@ class GaitSet(BaseModel):
 
         self.set_pooling = PackSequenceWrapper(torch.max)
 
-        self.Head = SeparateFCs(**model_cfg['SeparateFCs'])
+        self.Head = SeparateFCs(**model_cfg["SeparateFCs"])
 
-        self.HPP = HorizontalPoolingPyramid(bin_num=model_cfg['bin_num'])
+        self.HPP = HorizontalPoolingPyramid(bin_num=model_cfg["bin_num"])
 
     def forward(self, inputs):
         ipts, labs, _, _, seqL = inputs
         #!!!!!!!changed to occ input!!!!!!!!!!!
-        # normal ipts[0] occ ipts[1] 
+        # normal ipts[0] occ ipts[1]
         sils = ipts[0]  # [n, s, h, w]
         if len(sils.size()) == 4:
             sils = sils.unsqueeze(1)
@@ -62,7 +74,7 @@ class GaitSet(BaseModel):
         gl = gl + self.set_pooling(outs, seqL, options={"dim": 2})[0]
         gl = self.gl_block3(gl)
 
-        outs = self.set_block3(outs)        # [b,128,t,h,w]
+        outs = self.set_block3(outs)  # [b,128,t,h,w]
         outs = self.set_pooling(outs, seqL, options={"dim": 2})[0]  # [b,128,h,w]
         gl = gl + outs
 
@@ -74,46 +86,45 @@ class GaitSet(BaseModel):
 
         n, _, s, h, w = sils.size()
         retval = {
-            'training_feat': {
-                'triplet': {'embeddings': embs, 'labels': labs}
-            },
-            'visual_summary': {
-                'image/sils': sils.view(n*s, 1, h, w)
-            },
-            'inference_feat': {
-                'embeddings': embs
-            }
+            "training_feat": {"triplet": {"embeddings": embs, "labels": labs}},
+            "visual_summary": {"image/sils": sils.view(n * s, 1, h, w)},
+            "inference_feat": {"embeddings": embs},
         }
         return retval
 
 
-    
 class GaitSet_Nobase(nn.Module):
     """
-        GaitSet: Regarding Gait as a Set for Cross-View Gait Recognition
-        Arxiv:  https://arxiv.org/abs/1811.06186
-        Github: https://github.com/AbnerHqC/GaitSet
+    GaitSet: Regarding Gait as a Set for Cross-View Gait Recognition
+    Arxiv:  https://arxiv.org/abs/1811.06186
+    Github: https://github.com/AbnerHqC/GaitSet
     """
 
     def __init__(self, model_cfg):
         super(GaitSet_Nobase, self).__init__()
-        in_c = model_cfg['in_channels']
-        self.set_block1 = nn.Sequential(BasicConv2d(in_c[0], in_c[1], 5, 1, 2),
-                                        nn.LeakyReLU(inplace=True),
-                                        BasicConv2d(in_c[1], in_c[1], 3, 1, 1),
-                                        nn.LeakyReLU(inplace=True),
-                                        nn.MaxPool2d(kernel_size=2, stride=2))
+        in_c = model_cfg["in_channels"]
+        self.set_block1 = nn.Sequential(
+            BasicConv2d(in_c[0], in_c[1], 5, 1, 2),
+            nn.LeakyReLU(inplace=True),
+            BasicConv2d(in_c[1], in_c[1], 3, 1, 1),
+            nn.LeakyReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+        )
 
-        self.set_block2 = nn.Sequential(BasicConv2d(in_c[1], in_c[2], 3, 1, 1),
-                                        nn.LeakyReLU(inplace=True),
-                                        BasicConv2d(in_c[2], in_c[2], 3, 1, 1),
-                                        nn.LeakyReLU(inplace=True),
-                                        nn.MaxPool2d(kernel_size=2, stride=2))
+        self.set_block2 = nn.Sequential(
+            BasicConv2d(in_c[1], in_c[2], 3, 1, 1),
+            nn.LeakyReLU(inplace=True),
+            BasicConv2d(in_c[2], in_c[2], 3, 1, 1),
+            nn.LeakyReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+        )
 
-        self.set_block3 = nn.Sequential(BasicConv2d(in_c[2], in_c[3], 3, 1, 1),
-                                        nn.LeakyReLU(inplace=True),
-                                        BasicConv2d(in_c[3], in_c[3], 3, 1, 1),
-                                        nn.LeakyReLU(inplace=True))
+        self.set_block3 = nn.Sequential(
+            BasicConv2d(in_c[2], in_c[3], 3, 1, 1),
+            nn.LeakyReLU(inplace=True),
+            BasicConv2d(in_c[3], in_c[3], 3, 1, 1),
+            nn.LeakyReLU(inplace=True),
+        )
 
         self.gl_block2 = copy.deepcopy(self.set_block2)
         self.gl_block3 = copy.deepcopy(self.set_block3)
@@ -124,9 +135,9 @@ class GaitSet_Nobase(nn.Module):
 
         self.set_pooling = PackSequenceWrapper(torch.max)
 
-        self.Head = SeparateFCs(**model_cfg['SeparateFCs'])
+        self.Head = SeparateFCs(**model_cfg["SeparateFCs"])
 
-        self.HPP = HorizontalPoolingPyramid(bin_num=model_cfg['bin_num'])
+        self.HPP = HorizontalPoolingPyramid(bin_num=model_cfg["bin_num"])
 
     def forward(self, inputs):
         ipts, labs, _, _, seqL = inputs
@@ -153,14 +164,8 @@ class GaitSet_Nobase(nn.Module):
 
         n, _, s, h, w = sils.size()
         retval = {
-            'training_feat': {
-                'triplet': {'embeddings': embs, 'labels': labs}
-            },
-            'visual_summary': {
-                'image/sils': sils.view(n*s, 1, h, w)
-            },
-            'inference_feat': {
-                'embeddings': embs
-            }
+            "training_feat": {"triplet": {"embeddings": embs, "labels": labs}},
+            "visual_summary": {"image/sils": sils.view(n * s, 1, h, w)},
+            "inference_feat": {"embeddings": embs},
         }
         return retval

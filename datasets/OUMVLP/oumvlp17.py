@@ -6,7 +6,7 @@ import os.path as osp
 import argparse
 import logging
 
-'''
+"""
     gernerate the 17 Number of Pose Points Format from 18 Number of Pose Points
     OUMVLP 17
                # keypoints = {
@@ -50,10 +50,11 @@ import logging
             #     16: "Rear",
             #     17: "Lear"
             # }
-'''
+"""
+
 
 def ToOUMVLP17(input_path: Path, output_path: Path):
-    mask=[0,15,14,17,16,5,2,6,3,7,4,11,8,12,9,13,10]
+    mask = [0, 15, 14, 17, 16, 5, 2, 6, 3, 7, 4, 11, 8, 12, 9, 13, 10]
     TOTAL_SUBJECTS = 10307
     progress = tqdm(total=TOTAL_SUBJECTS)
 
@@ -65,21 +66,38 @@ def ToOUMVLP17(input_path: Path, output_path: Path):
                 src = os.path.join(view, f"{view.name}.pkl")
                 dst = os.path.join(output_path, output_subject, output_seq, view.name)
                 os.makedirs(dst, exist_ok=True)
-                with open(src,'rb') as f:
+                with open(src, "rb") as f:
                     srcdata = pickle.load(f)
-                    #[T,18,3]
-                data = srcdata[...,mask,:].copy()
+                    # [T,18,3]
+                data = srcdata[..., mask, :].copy()
                 # #[T,17,3]
-                pkl_path = os.path.join(dst,f'{view.name}.pkl')
-                pickle.dump(data,open(pkl_path,'wb')) 
+                pkl_path = os.path.join(dst, f"{view.name}.pkl")
+                pickle.dump(data, open(pkl_path, "wb"))
         progress.update(1)
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='OpenGait dataset pretreatment module.')
-    parser.add_argument('-i', '--input_path', default='', type=str, help='Root path of raw dataset.')
-    parser.add_argument('-o', '--output_path', default='', type=str, help='Output path of pickled dataset.')
-    parser.add_argument('-l', '--log_to_file', default='./pretreatment.log', type=str, help='Log file path. Default: ./pretreatment.log')
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="OpenGait dataset pretreatment module."
+    )
+    parser.add_argument(
+        "-i", "--input_path", default="", type=str, help="Root path of raw dataset."
+    )
+    parser.add_argument(
+        "-o",
+        "--output_path",
+        default="",
+        type=str,
+        help="Output path of pickled dataset.",
+    )
+    parser.add_argument(
+        "-l",
+        "--log_to_file",
+        default="./pretreatment.log",
+        type=str,
+        help="Log file path. Default: ./pretreatment.log",
+    )
     args = parser.parse_args()
-    logging.info('Begin')
+    logging.info("Begin")
     ToOUMVLP17(input_path=Path(args.input_path), output_path=Path(args.output_path))
-    logging.info('Done')
+    logging.info("Done")

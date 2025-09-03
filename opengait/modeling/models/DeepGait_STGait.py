@@ -7,17 +7,28 @@ import os.path as osp
 import matplotlib.pyplot as plt
 
 from ..base_model import BaseModel
-from ..modules import SetBlockWrapper, HorizontalPoolingPyramid, PackSequenceWrapper, SeparateFCs, SeparateBNNecks, \
-    conv1x1, conv3x3, BasicBlock2D, BasicBlockP3D, BasicBlock3D
-    # conv1x1, conv3x3, BasicBlock2D, BasicBlockP3D, BasicBlock3D, BasicBlock_SCGST
+from ..modules import (
+    SetBlockWrapper,
+    HorizontalPoolingPyramid,
+    PackSequenceWrapper,
+    SeparateFCs,
+    SeparateBNNecks,
+    conv1x1,
+    conv3x3,
+    BasicBlock2D,
+    BasicBlockP3D,
+    BasicBlock3D,
+)
+
+# conv1x1, conv3x3, BasicBlock2D, BasicBlockP3D, BasicBlock3D, BasicBlock_SCGST
 from ..backbones.STGait_Modules_New import SCGait_SCGTST_AA, GDTAFL
 
 from einops import rearrange
 
 blocks_map = {
-    '2d': BasicBlock2D,
-    'p3d': BasicBlockP3D,
-    '3d': BasicBlock3D,
+    "2d": BasicBlock2D,
+    "p3d": BasicBlockP3D,
+    "3d": BasicBlock3D,
     # 'SCGST': BasicBlock_SCGST
 }
 
@@ -25,89 +36,116 @@ blocks_map = {
 class DeepSTGaitV2(BaseModel):
 
     def build_network(self, model_cfg):
-        mode = model_cfg['Backbone']['mode']
+        mode = model_cfg["Backbone"]["mode"]
         assert mode in blocks_map.keys()
         block = blocks_map[mode]
 
-        in_channels = model_cfg['Backbone']['in_channels']
-        layers = model_cfg['Backbone']['layers']
-        channels = model_cfg['Backbone']['channels']
-        self.inference_use_emb2 = model_cfg['use_emb2'] if 'use_emb2' in model_cfg else False
+        in_channels = model_cfg["Backbone"]["in_channels"]
+        layers = model_cfg["Backbone"]["layers"]
+        channels = model_cfg["Backbone"]["channels"]
+        self.inference_use_emb2 = (
+            model_cfg["use_emb2"] if "use_emb2" in model_cfg else False
+        )
 
-        if mode == '3d':
-            strides = [
-                [1, 1],
-                [1, 2, 2],
-                [1, 2, 2],
-                [1, 1, 1]
-            ]
+        if mode == "3d":
+            strides = [[1, 1], [1, 2, 2], [1, 2, 2], [1, 1, 1]]
         else:
-            strides = [
-                [1, 1],
-                [2, 2],
-                [2, 2],
-                [1, 1]
-            ]
+            strides = [[1, 1], [2, 2], [2, 2], [1, 1]]
 
         self.inplanes = channels[0]
-        self.layer0 = SetBlockWrapper(nn.Sequential(
-            conv3x3(in_channels, self.inplanes, 1),
-            nn.BatchNorm2d(self.inplanes),
-            nn.ReLU(inplace=True)
-        ))
+        self.layer0 = SetBlockWrapper(
+            nn.Sequential(
+                conv3x3(in_channels, self.inplanes, 1),
+                nn.BatchNorm2d(self.inplanes),
+                nn.ReLU(inplace=True),
+            )
+        )
         self.layer1 = SetBlockWrapper(
-            self.make_layer(BasicBlock2D, channels[0], strides[0], blocks_num=layers[0], mode=mode))
+            self.make_layer(
+                BasicBlock2D, channels[0], strides[0], blocks_num=layers[0], mode=mode
+            )
+        )
 
-        self.layer2 = self.make_layer(block, channels[1], strides[1], blocks_num=layers[1], mode=mode)
-        self.layer3 = self.make_layer(block, channels[2], strides[2], blocks_num=layers[2], mode=mode)
-        self.layer4 = self.make_layer(block, channels[3], strides[3], blocks_num=layers[3], mode=mode)
+        self.layer2 = self.make_layer(
+            block, channels[1], strides[1], blocks_num=layers[1], mode=mode
+        )
+        self.layer3 = self.make_layer(
+            block, channels[2], strides[2], blocks_num=layers[2], mode=mode
+        )
+        self.layer4 = self.make_layer(
+            block, channels[3], strides[3], blocks_num=layers[3], mode=mode
+        )
 
-        self.SCGST = SCGait_SCGTST_AA(channels[1], num_groups=2, attn_agg = True)
+        self.SCGST = SCGait_SCGTST_AA(channels[1], num_groups=2, attn_agg=True)
         # # self.TAFL = TAFL(channels[1], attn_force_fp32=False, attn_aggregation=True)
-        self.GDTAFL = GDTAFL(channels[1], num_groups=2, attn_act_type='LeakyReLU', attn_force_fp32=False, attn_aggregation=True)
+        self.GDTAFL = GDTAFL(
+            channels[1],
+            num_groups=2,
+            attn_act_type="LeakyReLU",
+            attn_force_fp32=False,
+            attn_aggregation=True,
+        )
 
-        if mode == '2d':
+        if mode == "2d":
             self.layer2 = SetBlockWrapper(self.layer2)
             self.layer3 = SetBlockWrapper(self.layer3)
             self.layer4 = SetBlockWrapper(self.layer4)
 
         self.FCs = SeparateFCs(16, channels[3], channels[2])
-        self.BNNecks = SeparateBNNecks(16, channels[2], class_num=model_cfg['SeparateBNNecks']['class_num'])
+        self.BNNecks = SeparateBNNecks(
+            16, channels[2], class_num=model_cfg["SeparateBNNecks"]["class_num"]
+        )
 
         self.TP = PackSequenceWrapper(torch.max)
         self.HPP = HorizontalPoolingPyramid(bin_num=[16])
 
-    def make_layer(self, block, planes, stride, blocks_num, mode='2d'):
+    def make_layer(self, block, planes, stride, blocks_num, mode="2d"):
 
         if max(stride) > 1 or self.inplanes != planes * block.expansion:
-            if mode == '3d':
+            if mode == "3d":
                 downsample = nn.Sequential(
-                    nn.Conv3d(self.inplanes, planes * block.expansion, kernel_size=[1, 1, 1], stride=stride,
-                              padding=[0, 0, 0], bias=False), nn.BatchNorm3d(planes * block.expansion))
-            elif mode == '2d':
-                downsample = nn.Sequential(conv1x1(self.inplanes, planes * block.expansion, stride=stride),
-                                           nn.BatchNorm2d(planes * block.expansion))
-            elif mode == 'p3d':
+                    nn.Conv3d(
+                        self.inplanes,
+                        planes * block.expansion,
+                        kernel_size=[1, 1, 1],
+                        stride=stride,
+                        padding=[0, 0, 0],
+                        bias=False,
+                    ),
+                    nn.BatchNorm3d(planes * block.expansion),
+                )
+            elif mode == "2d":
                 downsample = nn.Sequential(
-                    nn.Conv3d(self.inplanes, planes * block.expansion, kernel_size=[1, 1, 1], stride=[1, *stride],
-                              padding=[0, 0, 0], bias=False), nn.BatchNorm3d(planes * block.expansion))
+                    conv1x1(self.inplanes, planes * block.expansion, stride=stride),
+                    nn.BatchNorm2d(planes * block.expansion),
+                )
+            elif mode == "p3d":
+                downsample = nn.Sequential(
+                    nn.Conv3d(
+                        self.inplanes,
+                        planes * block.expansion,
+                        kernel_size=[1, 1, 1],
+                        stride=[1, *stride],
+                        padding=[0, 0, 0],
+                        bias=False,
+                    ),
+                    nn.BatchNorm3d(planes * block.expansion),
+                )
             # elif mode == 'SCGST':
             #     downsample = nn.Sequential(
             #         nn.Conv3d(self.inplanes, planes * block.expansion, kernel_size=[1, 1, 1], stride=[1, *stride],
             #                   padding=[0, 0, 0], bias=False), nn.BatchNorm3d(planes * block.expansion))
 
             else:
-                raise TypeError('xxx')
+                raise TypeError("xxx")
         else:
             downsample = lambda x: x
 
         layers = [block(self.inplanes, planes, stride=stride, downsample=downsample)]
         self.inplanes = planes * block.expansion
-        s = [1, 1] if mode in ['2d', 'p3d'] else [1, 1, 1]
+        s = [1, 1] if mode in ["2d", "p3d"] else [1, 1, 1]
         for i in range(1, blocks_num):
-            layers.append(
-                block(self.inplanes, planes, stride=s)
-            )
+            layers.append(block(self.inplanes, planes, stride=s))
         return nn.Sequential(*layers)
 
     def forward(self, inputs):
@@ -146,16 +184,14 @@ class DeepSTGaitV2(BaseModel):
             embed = embed_1
 
         retval = {
-            'training_feat': {
-                'triplet': {'embeddings': embed_1, 'labels': labs},
-                'softmax': {'logits': logits, 'labels': labs}
+            "training_feat": {
+                "triplet": {"embeddings": embed_1, "labels": labs},
+                "softmax": {"logits": logits, "labels": labs},
             },
-            'visual_summary': {
-                'image/sils': rearrange(sils, 'n c s h w -> (n s) c h w'),
+            "visual_summary": {
+                "image/sils": rearrange(sils, "n c s h w -> (n s) c h w"),
             },
-            'inference_feat': {
-                'embeddings': embed
-            }
+            "inference_feat": {"embeddings": embed},
         }
 
         return retval

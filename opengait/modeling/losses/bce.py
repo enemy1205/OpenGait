@@ -10,15 +10,17 @@ class BinaryCrossEntropyLoss(BaseLoss):
 
     def forward(self, logits, labels):
         """
-            logits: [n, 1, h, w]
-            labels: [n, 1, h, w]
+        logits: [n, 1, h, w]
+        labels: [n, 1, h, w]
         """
         # predts = torch.sigmoid(logits.float())
         labels = labels.float()
         logits = logits.float()
 
-        loss = - (labels * torch.log(logits + self.eps) +
-                  (1 - labels) * torch.log(1. - logits + self.eps))
+        loss = -(
+            labels * torch.log(logits + self.eps)
+            + (1 - labels) * torch.log(1.0 - logits + self.eps)
+        )
 
         n = loss.size(0)
         # loss = loss.reshape(n,...)
@@ -26,10 +28,13 @@ class BinaryCrossEntropyLoss(BaseLoss):
         mean_loss = loss.mean()
         hard_loss = loss.max()
         miou = mean_iou((logits > 0.5).float(), labels)
-        self.info.update({
-            'loss': mean_loss.detach().clone(),
-            'hard_loss': hard_loss.detach().clone(),
-            'miou': miou.detach().clone()})
+        self.info.update(
+            {
+                "loss": mean_loss.detach().clone(),
+                "hard_loss": hard_loss.detach().clone(),
+                "miou": miou.detach().clone(),
+            }
+        )
 
         return mean_loss, self.info
 
@@ -37,6 +42,6 @@ class BinaryCrossEntropyLoss(BaseLoss):
 if __name__ == "__main__":
     loss_func = BinaryCrossEntropyLoss()
     ipts = torch.randn(1, 1, 128, 64)
-    tags = (torch.randn(1, 1, 128, 64) > 0.).float()
+    tags = (torch.randn(1, 1, 128, 64) > 0.0).float()
     loss = loss_func(ipts, tags)
     print(loss)

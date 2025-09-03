@@ -1,4 +1,3 @@
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -25,7 +24,7 @@ class Temporal(nn.Module):
 
 def gem(x, p=6.5, eps=1e-6):
 
-    return F.avg_pool2d(x.clamp(min=eps).pow(p), (1, x.size(-1))).pow(1. / p)
+    return F.avg_pool2d(x.clamp(min=eps).pow(p), (1, x.size(-1))).pow(1.0 / p)
 
 
 class GeM(nn.Module):
@@ -39,37 +38,71 @@ class GeM(nn.Module):
         return gem(x, p=self.p, eps=self.eps)
 
     def __repr__(self):
-        return self.__class__.__name__ + '(' + 'p=' + '{:.4f}'.format(self.p.data.tolist()[0]) + ', ' + 'eps=' + str(
-            self.eps) + ')'
+        return (
+            self.__class__.__name__
+            + "("
+            + "p="
+            + "{:.4f}".format(self.p.data.tolist()[0])
+            + ", "
+            + "eps="
+            + str(self.eps)
+            + ")"
+        )
 
 
 def gem1(x, p=3, eps=1e-6):
-    return F.avg_pool2d(x.clamp(min=eps).pow(p), (x.size(-2), x.size(-1))).pow(1./p)
+    return F.avg_pool2d(x.clamp(min=eps).pow(p), (x.size(-2), x.size(-1))).pow(1.0 / p)
+
 
 class GeM_1(nn.Module):
     def __init__(self, p=3, eps=1e-6):
-        super(GeM_1,self).__init__()
-        self.p=1
+        super(GeM_1, self).__init__()
+        self.p = 1
         self.eps = eps
+
     def forward(self, x):
         return gem1(x, p=self.p, eps=self.eps)
+
     def __repr__(self):
-        return self.__class__.__name__ + '(' + 'p=' + '{:.4f}'.format(self.p) + ', ' + 'eps=' + str(self.eps) + ')'
+        return (
+            self.__class__.__name__
+            + "("
+            + "p="
+            + "{:.4f}".format(self.p)
+            + ", "
+            + "eps="
+            + str(self.eps)
+            + ")"
+        )
+
 
 class GLConv(nn.Module):
-    def __init__(self, in_channels, out_channels, halving, fm_sign=False, kernel_size=(3, 3, 3), stride=(1, 1, 1), padding=(1, 1, 1), bias=False, **kwargs):
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        halving,
+        fm_sign=False,
+        kernel_size=(3, 3, 3),
+        stride=(1, 1, 1),
+        padding=(1, 1, 1),
+        bias=False,
+        **kwargs
+    ):
         super(GLConv, self).__init__()
         self.halving = halving
         self.fm_sign = fm_sign
         self.global_conv3d = BasicConv3d(
-            in_channels, out_channels, kernel_size, stride, padding, bias, **kwargs)
+            in_channels, out_channels, kernel_size, stride, padding, bias, **kwargs
+        )
         self.local_conv3d = BasicConv3d(
-            in_channels, out_channels, kernel_size, stride, padding, bias, **kwargs)
+            in_channels, out_channels, kernel_size, stride, padding, bias, **kwargs
+        )
 
     def forward(self, x):
-        '''
-            x: [n, c, s, h, w]
-        '''
+        """
+        x: [n, c, s, h, w]
+        """
         gob_feat = self.global_conv3d(x)
         if self.halving == 0:
             lcl_feat = self.local_conv3d(x)
@@ -90,17 +123,18 @@ class GeMHPP(nn.Module):
     def __init__(self, bin_num=[64], p=6.5, eps=1.0e-6):
         super(GeMHPP, self).__init__()
         self.bin_num = bin_num
-        self.p = nn.Parameter(
-            torch.ones(1)*p)
+        self.p = nn.Parameter(torch.ones(1) * p)
         self.eps = eps
 
     def gem(self, ipts):
-        return F.avg_pool2d(ipts.clamp(min=self.eps).pow(self.p), (1, ipts.size(-1))).pow(1. / self.p)
+        return F.avg_pool2d(
+            ipts.clamp(min=self.eps).pow(self.p), (1, ipts.size(-1))
+        ).pow(1.0 / self.p)
 
     def forward(self, x):
         """
-            x  : [n, c, h, w]
-            ret: [n, c, p]
+        x  : [n, c, h, w]
+        ret: [n, c, p]
         """
         n, c = x.size()[:2]
         features = []
@@ -113,29 +147,56 @@ class GeMHPP(nn.Module):
 
 class LagrangeGait(BaseModel):
     def build_network(self, model_cfg):
-        in_c = model_cfg['channels']
-        num_classes = model_cfg['class_num']
-        view_nums = model_cfg['view_nums']
-        radius = model_cfg['radius']
+        in_c = model_cfg["channels"]
+        num_classes = model_cfg["class_num"]
+        view_nums = model_cfg["view_nums"]
+        radius = model_cfg["radius"]
 
         self.conv3d = nn.Sequential(
-            BasicConv3d(1, in_c[0], kernel_size=(3, 3, 3),
-                        stride=(1, 1, 1), padding=(1, 1, 1)),
-            nn.LeakyReLU(inplace=True)
+            BasicConv3d(
+                1, in_c[0], kernel_size=(3, 3, 3), stride=(1, 1, 1), padding=(1, 1, 1)
+            ),
+            nn.LeakyReLU(inplace=True),
         )
         self.LTA = nn.Sequential(
-            BasicConv3d(in_c[0], in_c[0], kernel_size=(
-                3, 1, 1), stride=(3, 1, 1), padding=(0, 0, 0)),
-            nn.LeakyReLU(inplace=True)
+            BasicConv3d(
+                in_c[0],
+                in_c[0],
+                kernel_size=(3, 1, 1),
+                stride=(3, 1, 1),
+                padding=(0, 0, 0),
+            ),
+            nn.LeakyReLU(inplace=True),
         )
-        self.GLConvA0 = GLConv(in_c[0], in_c[1], halving=3, fm_sign=False, kernel_size=(
-            3, 3, 3), stride=(1, 1, 1), padding=(1, 1, 1))
+        self.GLConvA0 = GLConv(
+            in_c[0],
+            in_c[1],
+            halving=3,
+            fm_sign=False,
+            kernel_size=(3, 3, 3),
+            stride=(1, 1, 1),
+            padding=(1, 1, 1),
+        )
         self.MaxPool0 = nn.MaxPool3d(kernel_size=(1, 2, 2), stride=(1, 2, 2))
         ########################################Level-1###########################################################
-        self.GLConvA1 = GLConv(in_c[1], in_c[2], halving=3, fm_sign=False, kernel_size=(
-            3, 3, 3), stride=(1, 1, 1), padding=(1, 1, 1))
-        self.GLConvB2 = GLConv(in_c[2], in_c[2], halving=3, fm_sign=True, kernel_size=(
-            3, 3, 3), stride=(1, 1, 1), padding=(1, 1, 1))
+        self.GLConvA1 = GLConv(
+            in_c[1],
+            in_c[2],
+            halving=3,
+            fm_sign=False,
+            kernel_size=(3, 3, 3),
+            stride=(1, 1, 1),
+            padding=(1, 1, 1),
+        )
+        self.GLConvB2 = GLConv(
+            in_c[2],
+            in_c[2],
+            halving=3,
+            fm_sign=True,
+            kernel_size=(3, 3, 3),
+            stride=(1, 1, 1),
+            padding=(1, 1, 1),
+        )
 
         self.fpb3d = Temporal(in_c[2], in_c[2])
 
@@ -148,7 +209,9 @@ class LagrangeGait(BaseModel):
 
         self.fc_bin = nn.Parameter(
             nn.init.xavier_uniform_(
-                torch.zeros(sum(self.bin_numgl), in_c[2] + in_c[0], in_c[3])))
+                torch.zeros(sum(self.bin_numgl), in_c[2] + in_c[0], in_c[3])
+            )
+        )
 
         self.view_embedding_64_motion = nn.Parameter(torch.randn(view_nums, in_c[0], 1))
         # self.view_embedding_64_motion2 = nn.Parameter(torch.randn(view_nums, in_c[0], 1))
@@ -157,27 +220,36 @@ class LagrangeGait(BaseModel):
 
         self.fc_bin_motion = nn.Parameter(
             nn.init.xavier_uniform_(
-                torch.zeros(sum(self.bin_numgl_motion), in_c[2] + in_c[0], in_c[3])))
+                torch.zeros(sum(self.bin_numgl_motion), in_c[2] + in_c[0], in_c[3])
+            )
+        )
 
-
-        self.motion_extract = CorrBlock(num_levels=1, radius = radius, input_dim=in_c[0])
-        self.motion_conv1 = BasicConv3d(1 * (radius * 2 + 1) ** 2, in_c[1], kernel_size=3)
+        self.motion_extract = CorrBlock(num_levels=1, radius=radius, input_dim=in_c[0])
+        self.motion_conv1 = BasicConv3d(
+            1 * (radius * 2 + 1) ** 2, in_c[1], kernel_size=3
+        )
         self.motion_conv2 = BasicConv3d(in_c[1], in_c[2], kernel_size=3)
         self.pool_motion = nn.AdaptiveAvgPool2d((1, 1))
 
-
         self.bn2 = nn.BatchNorm1d(in_c[3])
-        self.fc2 = SeparateFCs(sum(self.bin_numgl + self.bin_numgl_motion), in_c[3], num_classes)
-
+        self.fc2 = SeparateFCs(
+            sum(self.bin_numgl + self.bin_numgl_motion), in_c[3], num_classes
+        )
 
     def forward(self, inputs):
         ipts, labs, _, view, seqL = inputs
-        view = [int(int(i) / 15) if int(i) <= 90 else int(int(i) - 90 + 15) / 15 for i in view]
+        view = [
+            int(int(i) / 15) if int(i) <= 90 else int(int(i) - 90 + 15) / 15
+            for i in view
+        ]
         view = torch.tensor(view).long().cuda()
         seqL = None if not self.training else seqL
         if not self.training and len(labs) != 1:
             raise ValueError(
-                'The input size of each GPU must be 1 in testing mode, but got {}!'.format(len(labs)))
+                "The input size of each GPU must be 1 in testing mode, but got {}!".format(
+                    len(labs)
+                )
+            )
         sils = ipts[0].unsqueeze(1)
         del ipts
         n, _, s, h, w = sils.size()
@@ -204,10 +276,8 @@ class LagrangeGait(BaseModel):
         # b, c, t, h, w = x2d_motion.shape
         x2d_motion = x2d_motion.mean(2)
 
-
         outs = self.GLConvA1(outs)
         outs = self.GLConvB2(outs)  # [n, c, s, h, w]
-
 
         x2db3d = self.fpb3d(outs)
         n, c2d, _, _ = x2db3d.size()
@@ -222,10 +292,18 @@ class LagrangeGait(BaseModel):
         for num_bin in self.bin_numgl_motion:
             z = x2d_motion.view(n, c2d, num_bin, hh // num_bin, ww).contiguous()
             z = self.pool_motion(z)
-            z2 = torch.cat([z.view(n, c2d, num_bin), self.view_embedding_64_motion[angle].expand(-1, -1, num_bin)], 1)
+            z2 = torch.cat(
+                [
+                    z.view(n, c2d, num_bin),
+                    self.view_embedding_64_motion[angle].expand(-1, -1, num_bin),
+                ],
+                1,
+            )
 
             feature_motion.append(z2)
-        feature_motion = torch.cat(feature_motion, 2).permute(2, 0, 1).contiguous()  # 8 n 256
+        feature_motion = (
+            torch.cat(feature_motion, 2).permute(2, 0, 1).contiguous()
+        )  # 8 n 256
         feature_motion = feature_motion.matmul(self.fc_bin_motion)  # 8 n 256
         feature_motion = feature_motion.permute(1, 2, 0).contiguous()
 
@@ -234,13 +312,18 @@ class LagrangeGait(BaseModel):
         feature = list()
         for num_bin in self.bin_numgl:
             z = x2db3d.view(n, c2d, num_bin, -1).contiguous()
-            z2 = torch.cat((self.Gem(z).squeeze(-1), self.view_embedding_64[angle].expand(-1, -1, num_bin)), 1)
+            z2 = torch.cat(
+                (
+                    self.Gem(z).squeeze(-1),
+                    self.view_embedding_64[angle].expand(-1, -1, num_bin),
+                ),
+                1,
+            )
             feature.append(z2)
         feature = torch.cat(feature, 2).permute(2, 0, 1).contiguous()  # 64 n 256
         feature = feature.matmul(self.fc_bin)  # 64 n 256
         feature = feature.permute(1, 2, 0).contiguous()
         feature = torch.cat([feature_motion, feature], 2)
-
 
         embed = self.bn2(feature)  # ([B, 256, 128])
 
@@ -249,16 +332,12 @@ class LagrangeGait(BaseModel):
         # Since this may have been repeated, we need to get n,s again
         n, _, s, h, w = sils.size()
         retval = {
-            'training_feat': {
-                'triplet': {'embeddings': embed, 'labels': labs},
-                'softmax': {'logits': logi, 'labels': labs},
-                'view_softmax': {'logits': angle_probe.unsqueeze(1), 'labels': view}
+            "training_feat": {
+                "triplet": {"embeddings": embed, "labels": labs},
+                "softmax": {"logits": logi, "labels": labs},
+                "view_softmax": {"logits": angle_probe.unsqueeze(1), "labels": view},
             },
-            'visual_summary': {
-                'image/sils': sils.view(n * s, 1, h, w)
-            },
-            'inference_feat': {
-                'embeddings': embed
-            }
+            "visual_summary": {"image/sils": sils.view(n * s, 1, h, w)},
+            "inference_feat": {"embeddings": embed},
         }
         return retval

@@ -1,6 +1,6 @@
-'''
+"""
 Modifed fromhttps://github.com/BNU-IVC/FastPoseGait/blob/main/fastposegait/modeling/losses/supconloss.py
-'''
+"""
 
 import torch.nn as nn
 import torch
@@ -15,8 +15,7 @@ class SupConLoss_Re(BaseLoss):
     @gather_and_scale_wrapper
     def forward(self, features, labels=None, mask=None):
         loss = self.train_loss(features, labels)
-        self.info.update({
-            'loss': loss.detach().clone()})
+        self.info.update({"loss": loss.detach().clone()})
         return loss, self.info
 
 
@@ -24,13 +23,13 @@ class SupConLoss_Lp(BaseLoss):
     def __init__(self, temperature=0.01):
         super(SupConLoss_Lp, self).__init__()
         self.train_loss = SupConLoss(
-            temperature=temperature, base_temperature=temperature, reduce_zero=True, p=2)
+            temperature=temperature, base_temperature=temperature, reduce_zero=True, p=2
+        )
 
     @gather_and_scale_wrapper
     def forward(self, features, labels=None, mask=None):
         loss = self.train_loss(features.unsqueeze(1), labels)
-        self.info.update({
-            'loss': loss.detach().clone()})
+        self.info.update({"loss": loss.detach().clone()})
         return loss, self.info
 
 
@@ -38,8 +37,14 @@ class SupConLoss(nn.Module):
     """Supervised Contrastive Learning: https://arxiv.org/pdf/2004.11362.pdf.
     It also supports the unsupervised contrastive loss in SimCLR"""
 
-    def __init__(self, temperature=0.01, contrast_mode='all',
-                 base_temperature=0.07, reduce_zero=False, p=None):
+    def __init__(
+        self,
+        temperature=0.01,
+        contrast_mode="all",
+        base_temperature=0.07,
+        reduce_zero=False,
+        p=None,
+    ):
         super(SupConLoss, self).__init__()
         self.temperature = temperature
         self.contrast_mode = contrast_mode
@@ -59,52 +64,52 @@ class SupConLoss(nn.Module):
         Returns:
             A loss scalar.
         """
-        device = (torch.device('cuda')
-                  if features.is_cuda
-                  else torch.device('cpu'))
+        device = torch.device("cuda") if features.is_cuda else torch.device("cpu")
 
         if len(features.shape) < 3:
-            raise ValueError('`features` needs to be [bsz, n_views, ...],'
-                             'at least 3 dimensions are required')
+            raise ValueError(
+                "`features` needs to be [bsz, n_views, ...],"
+                "at least 3 dimensions are required"
+            )
         if len(features.shape) > 3:
             features = features.view(features.shape[0], features.shape[1], -1)
 
         batch_size = features.shape[0]
         if labels is not None and mask is not None:
-            raise ValueError('Cannot define both `labels` and `mask`')
+            raise ValueError("Cannot define both `labels` and `mask`")
         elif labels is None and mask is None:
             mask = torch.eye(batch_size, dtype=torch.float32).to(device)
         elif labels is not None:
             labels = labels.contiguous().view(-1, 1)
             if labels.shape[0] != batch_size:
-                raise ValueError('Num of labels does not match num of features')
+                raise ValueError("Num of labels does not match num of features")
             mask = torch.eq(labels, labels.T).float().to(device)
         else:
             mask = mask.float().to(device)
 
         contrast_count = features.shape[1]
         contrast_feature = torch.cat(torch.unbind(features, dim=1), dim=0)
-        if self.contrast_mode == 'one':
+        if self.contrast_mode == "one":
             anchor_feature = features[:, 0]
             anchor_count = 1
-        elif self.contrast_mode == 'all':
+        elif self.contrast_mode == "all":
             anchor_feature = contrast_feature
             anchor_count = contrast_count
         else:
-            raise ValueError('Unknown mode: {}'.format(self.contrast_mode))
+            raise ValueError("Unknown mode: {}".format(self.contrast_mode))
 
         # compute distance mat
         if self.p is None:
-            mat = torch.matmul(
-                anchor_feature, contrast_feature.T)
+            mat = torch.matmul(anchor_feature, contrast_feature.T)
         else:
             anchor_feature = torch.nn.functional.normalize(
-                anchor_feature, p=self.p, dim=1)
+                anchor_feature, p=self.p, dim=1
+            )
             contrast_feature = torch.nn.functional.normalize(
-                contrast_feature, p=self.p, dim=1)
-            mat = -torch.cdist(
-                anchor_feature, contrast_feature, p=self.p)
-        mat = mat/self.temperature
+                contrast_feature, p=self.p, dim=1
+            )
+            mat = -torch.cdist(anchor_feature, contrast_feature, p=self.p)
+        mat = mat / self.temperature
         # for numerical stability
         logits_max, _ = torch.max(mat, dim=1, keepdim=True)
         logits = mat - logits_max.detach()
@@ -116,7 +121,7 @@ class SupConLoss(nn.Module):
             torch.ones_like(mask),
             1,
             torch.arange(batch_size * anchor_count).view(-1, 1).to(device),
-            0
+            0,
         )
         mask = mask * logits_mask
 
@@ -125,10 +130,11 @@ class SupConLoss(nn.Module):
         log_prob = logits - torch.log(exp_logits.sum(1, keepdim=True))
 
         # compute mean of log-likelihood over positive
-        mean_log_prob_pos = (mask * log_prob).sum(1) / \
-            (mask.sum(1)+torch.finfo(mat.dtype).tiny)
+        mean_log_prob_pos = (mask * log_prob).sum(1) / (
+            mask.sum(1) + torch.finfo(mat.dtype).tiny
+        )
         # loss
-        loss = - (self.temperature / self.base_temperature) * mean_log_prob_pos
+        loss = -(self.temperature / self.base_temperature) * mean_log_prob_pos
         if self.reduce_zero:
             loss = loss[loss > 0]
 

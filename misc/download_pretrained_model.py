@@ -20,6 +20,7 @@ import requests
 import time
 import sys
 import zipfile
+
 lasttime = time.time()
 FLUSH_INTERVAL = 0.1
 
@@ -39,13 +40,13 @@ def _download_file(url, savepath, print_progress):
     if print_progress:
         print("Connecting to {}".format(url))
     r = requests.get(url, stream=True, timeout=15)
-    total_length = r.headers.get('content-length')
+    total_length = r.headers.get("content-length")
 
     if total_length is None:
-        with open(savepath, 'wb') as f:
+        with open(savepath, "wb") as f:
             shutil.copyfileobj(r.raw, f)
     else:
-        with open(savepath, 'wb') as f:
+        with open(savepath, "wb") as f:
             dl = 0
             total_length = int(total_length)
             if print_progress:
@@ -55,14 +56,15 @@ def _download_file(url, savepath, print_progress):
                 f.write(data)
                 if print_progress:
                     done = int(50 * dl / total_length)
-                    progress("[%-50s] %.2f%%" %
-                             ('=' * done, float(100 * dl) / total_length))
+                    progress(
+                        "[%-50s] %.2f%%" % ("=" * done, float(100 * dl) / total_length)
+                    )
         if print_progress:
-            progress("[%-50s] %.2f%%" % ('=' * 50, 100), end=True)
+            progress("[%-50s] %.2f%%" % ("=" * 50, 100), end=True)
 
 
 def _uncompress_file_zip(filepath, extrapath):
-    files = zipfile.ZipFile(filepath, 'r')
+    files = zipfile.ZipFile(filepath, "r")
     filelist = files.namelist()
     rootpath = filelist[0]
     total_num = len(filelist)
@@ -73,20 +75,21 @@ def _uncompress_file_zip(filepath, extrapath):
     yield total_num, index, rootpath
 
 
-def download_file_and_uncompress(url,
-                                 savepath=None,
-                                 print_progress=True,
-                                 replace=False,
-                                 extrapath=None,
-                                 delete_file=True):
+def download_file_and_uncompress(
+    url,
+    savepath=None,
+    print_progress=True,
+    replace=False,
+    extrapath=None,
+    delete_file=True,
+):
     if savepath is None:
         savepath = "."
     if extrapath is None:
         extrapath = "."
     savename = url.split("/")[-1]
     if not savename.endswith("zip"):
-        raise NotImplementedError(
-            "Only support zip file, but got {}!".format(savename))
+        raise NotImplementedError("Only support zip file, but got {}!".format(savename))
     if not os.path.exists(savepath):
         os.makedirs(savepath)
 
@@ -107,9 +110,10 @@ def download_file_and_uncompress(url,
             if print_progress:
                 done = int(50 * float(index) / total_num)
                 progress(
-                    "[%-50s] %.2f%%" % ('=' * done, float(100 * index) / total_num))
+                    "[%-50s] %.2f%%" % ("=" * done, float(100 * index) / total_num)
+                )
         if print_progress:
-            progress("[%-50s] %.2f%%" % ('=' * 50, 100), end=True)
+            progress("[%-50s] %.2f%%" % ("=" * 50, 100), end=True)
 
         if delete_file:
             os.remove(savepath)
@@ -121,13 +125,14 @@ if __name__ == "__main__":
     urls = [
         "https://github.com/ShiqiYu/OpenGait/releases/download/v1.0/pretrained_casiab_model.zip",
         "https://github.com/ShiqiYu/OpenGait/releases/download/v1.1/pretrained_oumvlp_model.zip",
-        "https://github.com/ShiqiYu/OpenGait/releases/download/v1.1/pretrained_grew_model.zip"]
+        "https://github.com/ShiqiYu/OpenGait/releases/download/v1.1/pretrained_grew_model.zip",
+    ]
     for url in urls:
-        download_file_and_uncompress(
-            url=url, extrapath='output')
-    gaitgl_grew = ['https://github.com/ShiqiYu/OpenGait/releases/download/v1.1/pretrained_grew_gaitgl.zip',
-                   'https://github.com/ShiqiYu/OpenGait/releases/download/v1.1/pretrained_grew_gaitgl_bnneck.zip']
+        download_file_and_uncompress(url=url, extrapath="output")
+    gaitgl_grew = [
+        "https://github.com/ShiqiYu/OpenGait/releases/download/v1.1/pretrained_grew_gaitgl.zip",
+        "https://github.com/ShiqiYu/OpenGait/releases/download/v1.1/pretrained_grew_gaitgl_bnneck.zip",
+    ]
     for gaitgl in gaitgl_grew:
-        download_file_and_uncompress(
-                url=gaitgl, extrapath='output/GREW/GaitGL')
+        download_file_and_uncompress(url=gaitgl, extrapath="output/GREW/GaitGL")
     print("Pretrained model download success!")

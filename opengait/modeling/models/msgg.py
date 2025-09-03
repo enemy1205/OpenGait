@@ -6,28 +6,41 @@ import numpy as np
 
 from ..base_model import BaseModel
 
+
 class MultiScaleGaitGraph(BaseModel):
     """
-        Learning Rich Features for Gait Recognition by Integrating Skeletons and Silhouettes
-        Github: https://github.com/YunjiePeng/BimodalFusion
+    Learning Rich Features for Gait Recognition by Integrating Skeletons and Silhouettes
+    Github: https://github.com/YunjiePeng/BimodalFusion
     """
 
     def build_network(self, model_cfg):
-        in_c = model_cfg['in_channels']
-        out_c = model_cfg['out_channels']
-        num_id = model_cfg['num_id']
+        in_c = model_cfg["in_channels"]
+        out_c = model_cfg["out_channels"]
+        num_id = model_cfg["num_id"]
 
-        temporal_kernel_size = model_cfg['temporal_kernel_size']
+        temporal_kernel_size = model_cfg["temporal_kernel_size"]
 
         # load spatial graph
-        self.graph = SpatialGraph(**model_cfg['graph_cfg'])
-        A_lowSemantic = torch.tensor(self.graph.get_adjacency(semantic_level=0), dtype=torch.float32, requires_grad=False)
-        A_mediumSemantic =  torch.tensor(self.graph.get_adjacency(semantic_level=1), dtype=torch.float32, requires_grad=False)
-        A_highSemantic = torch.tensor(self.graph.get_adjacency(semantic_level=2), dtype=torch.float32, requires_grad=False)
+        self.graph = SpatialGraph(**model_cfg["graph_cfg"])
+        A_lowSemantic = torch.tensor(
+            self.graph.get_adjacency(semantic_level=0),
+            dtype=torch.float32,
+            requires_grad=False,
+        )
+        A_mediumSemantic = torch.tensor(
+            self.graph.get_adjacency(semantic_level=1),
+            dtype=torch.float32,
+            requires_grad=False,
+        )
+        A_highSemantic = torch.tensor(
+            self.graph.get_adjacency(semantic_level=2),
+            dtype=torch.float32,
+            requires_grad=False,
+        )
 
-        self.register_buffer('A_lowSemantic', A_lowSemantic)
-        self.register_buffer('A_mediumSemantic', A_mediumSemantic)
-        self.register_buffer('A_highSemantic', A_highSemantic)
+        self.register_buffer("A_lowSemantic", A_lowSemantic)
+        self.register_buffer("A_mediumSemantic", A_mediumSemantic)
+        self.register_buffer("A_highSemantic", A_highSemantic)
 
         # build networks
         spatial_kernel_size = self.graph.num_A
@@ -37,31 +50,58 @@ class MultiScaleGaitGraph(BaseModel):
         self.st_gcn_networks_lowSemantic = nn.ModuleList()
         self.st_gcn_networks_mediumSemantic = nn.ModuleList()
         self.st_gcn_networks_highSemantic = nn.ModuleList()
-        for i in range(len(in_c)-1):
+        for i in range(len(in_c) - 1):
             if i == 0:
-                self.st_gcn_networks_lowSemantic.append(st_gcn_block(in_c[i], in_c[i+1], kernel_size, 1, residual=False))
-                self.st_gcn_networks_mediumSemantic.append(st_gcn_block(in_c[i], in_c[i+1], kernel_size, 1, residual=False))
-                self.st_gcn_networks_highSemantic.append(st_gcn_block(in_c[i], in_c[i+1], kernel_size, 1, residual=False))
+                self.st_gcn_networks_lowSemantic.append(
+                    st_gcn_block(in_c[i], in_c[i + 1], kernel_size, 1, residual=False)
+                )
+                self.st_gcn_networks_mediumSemantic.append(
+                    st_gcn_block(in_c[i], in_c[i + 1], kernel_size, 1, residual=False)
+                )
+                self.st_gcn_networks_highSemantic.append(
+                    st_gcn_block(in_c[i], in_c[i + 1], kernel_size, 1, residual=False)
+                )
             else:
-                self.st_gcn_networks_lowSemantic.append(st_gcn_block(in_c[i], in_c[i+1], kernel_size, 1))
-                self.st_gcn_networks_mediumSemantic.append(st_gcn_block(in_c[i], in_c[i+1], kernel_size, 1))
-                self.st_gcn_networks_highSemantic.append(st_gcn_block(in_c[i], in_c[i+1], kernel_size, 1))
+                self.st_gcn_networks_lowSemantic.append(
+                    st_gcn_block(in_c[i], in_c[i + 1], kernel_size, 1)
+                )
+                self.st_gcn_networks_mediumSemantic.append(
+                    st_gcn_block(in_c[i], in_c[i + 1], kernel_size, 1)
+                )
+                self.st_gcn_networks_highSemantic.append(
+                    st_gcn_block(in_c[i], in_c[i + 1], kernel_size, 1)
+                )
 
-            self.st_gcn_networks_lowSemantic.append(st_gcn_block(in_c[i+1], in_c[i+1], kernel_size, 1))
-            self.st_gcn_networks_mediumSemantic.append(st_gcn_block(in_c[i+1], in_c[i+1], kernel_size, 1))
-            self.st_gcn_networks_highSemantic.append(st_gcn_block(in_c[i+1], in_c[i+1], kernel_size, 1))
+            self.st_gcn_networks_lowSemantic.append(
+                st_gcn_block(in_c[i + 1], in_c[i + 1], kernel_size, 1)
+            )
+            self.st_gcn_networks_mediumSemantic.append(
+                st_gcn_block(in_c[i + 1], in_c[i + 1], kernel_size, 1)
+            )
+            self.st_gcn_networks_highSemantic.append(
+                st_gcn_block(in_c[i + 1], in_c[i + 1], kernel_size, 1)
+            )
 
-        self.edge_importance_lowSemantic = nn.ParameterList([
-            nn.Parameter(torch.ones(self.A_lowSemantic.size()))
-            for i in self.st_gcn_networks_lowSemantic])
+        self.edge_importance_lowSemantic = nn.ParameterList(
+            [
+                nn.Parameter(torch.ones(self.A_lowSemantic.size()))
+                for i in self.st_gcn_networks_lowSemantic
+            ]
+        )
 
-        self.edge_importance_mediumSemantic = nn.ParameterList([
-            nn.Parameter(torch.ones(self.A_mediumSemantic.size()))
-            for i in self.st_gcn_networks_mediumSemantic])
+        self.edge_importance_mediumSemantic = nn.ParameterList(
+            [
+                nn.Parameter(torch.ones(self.A_mediumSemantic.size()))
+                for i in self.st_gcn_networks_mediumSemantic
+            ]
+        )
 
-        self.edge_importance_highSemantic = nn.ParameterList([
-            nn.Parameter(torch.ones(self.A_highSemantic.size()))
-            for i in self.st_gcn_networks_highSemantic])
+        self.edge_importance_highSemantic = nn.ParameterList(
+            [
+                nn.Parameter(torch.ones(self.A_highSemantic.size()))
+                for i in self.st_gcn_networks_highSemantic
+            ]
+        )
 
         self.fc = nn.Linear(in_c[-1], out_c)
         self.bn_neck = nn.BatchNorm1d(out_c)
@@ -75,7 +115,7 @@ class MultiScaleGaitGraph(BaseModel):
 
     def forward(self, inputs):
         ipts, labs, _, _, seqL = inputs
-        
+
         x = ipts[0]  # [N, T, V, C]
         del ipts
         """
@@ -90,9 +130,25 @@ class MultiScaleGaitGraph(BaseModel):
 
         y = self.semantic_pooling(x)
         z = self.semantic_pooling(y)
-        for gcn_lowSemantic, importance_lowSemantic, gcn_mediumSemantic, importance_mediumSemantic, gcn_highSemantic, importance_highSemantic in zip(self.st_gcn_networks_lowSemantic, self.edge_importance_lowSemantic, self.st_gcn_networks_mediumSemantic, self.edge_importance_mediumSemantic, self.st_gcn_networks_highSemantic, self.edge_importance_highSemantic):
+        for (
+            gcn_lowSemantic,
+            importance_lowSemantic,
+            gcn_mediumSemantic,
+            importance_mediumSemantic,
+            gcn_highSemantic,
+            importance_highSemantic,
+        ) in zip(
+            self.st_gcn_networks_lowSemantic,
+            self.edge_importance_lowSemantic,
+            self.st_gcn_networks_mediumSemantic,
+            self.edge_importance_mediumSemantic,
+            self.st_gcn_networks_highSemantic,
+            self.edge_importance_highSemantic,
+        ):
             x, _ = gcn_lowSemantic(x, self.A_lowSemantic * importance_lowSemantic)
-            y, _ = gcn_mediumSemantic(y, self.A_mediumSemantic * importance_mediumSemantic)
+            y, _ = gcn_mediumSemantic(
+                y, self.A_mediumSemantic * importance_mediumSemantic
+            )
             z, _ = gcn_highSemantic(z, self.A_highSemantic * importance_highSemantic)
 
             # Cross-scale Message Passing
@@ -100,41 +156,40 @@ class MultiScaleGaitGraph(BaseModel):
             y = torch.add(y, x_sp)
             y_sp = self.semantic_pooling(y)
             z = torch.add(z, y_sp)
-        
+
         # global pooling for each layer
         x_sp = F.avg_pool2d(x, x.size()[2:])
         N, C, T, V = x_sp.size()
-        x_sp = x_sp.view(N, C, T*V).contiguous()
+        x_sp = x_sp.view(N, C, T * V).contiguous()
 
         y_sp = F.avg_pool2d(y, y.size()[2:])
         N, C, T, V = y_sp.size()
-        y_sp = y_sp.view(N, C, T*V).contiguous()
+        y_sp = y_sp.view(N, C, T * V).contiguous()
 
         z = F.avg_pool2d(z, z.size()[2:])
         N, C, T, V = z.size()
         z = z.permute(0, 2, 3, 1).contiguous()
-        z = z.view(N, T*V, C)
+        z = z.view(N, T * V, C)
 
         z_fc = self.fc(z.view(N, -1))
         bn_z_fc = self.bn_neck(z_fc)
         z_cls_score = self.encoder_cls(bn_z_fc)
 
-        z_fc = z_fc.unsqueeze(-1).contiguous() # [n, c, p]
-        z_cls_score = z_cls_score.unsqueeze(-1).contiguous() # [n, c, p]
+        z_fc = z_fc.unsqueeze(-1).contiguous()  # [n, c, p]
+        z_cls_score = z_cls_score.unsqueeze(-1).contiguous()  # [n, c, p]
 
         retval = {
-            'training_feat': {
-                'triplet_joints': {'embeddings': x_sp, 'labels': labs},
-                'triplet_limbs': {'embeddings': y_sp, 'labels': labs},
-                'triplet_bodyparts': {'embeddings': z_fc, 'labels': labs},
-                'softmax': {'logits': z_cls_score, 'labels': labs}
+            "training_feat": {
+                "triplet_joints": {"embeddings": x_sp, "labels": labs},
+                "triplet_limbs": {"embeddings": y_sp, "labels": labs},
+                "triplet_bodyparts": {"embeddings": z_fc, "labels": labs},
+                "softmax": {"logits": z_cls_score, "labels": labs},
             },
-            'visual_summary': {},
-            'inference_feat': {
-                'embeddings': z_fc
-            }
+            "visual_summary": {},
+            "inference_feat": {"embeddings": z_fc},
         }
         return retval
+
 
 class st_gcn_block(nn.Module):
     r"""Applies a spatial temporal graph convolution over an input graph sequence.
@@ -157,13 +212,9 @@ class st_gcn_block(nn.Module):
             :math:`V` is the number of graph nodes.
     """
 
-    def __init__(self,
-                 in_channels,
-                 out_channels,
-                 kernel_size,
-                 stride=1,
-                 dropout=0,
-                 residual=True):
+    def __init__(
+        self, in_channels, out_channels, kernel_size, stride=1, dropout=0, residual=True
+    ):
         super().__init__()
 
         assert len(kernel_size) == 2
@@ -194,11 +245,7 @@ class st_gcn_block(nn.Module):
 
         else:
             self.residual = nn.Sequential(
-                nn.Conv2d(
-                    in_channels,
-                    out_channels,
-                    kernel_size=1,
-                    stride=(stride, 1)),
+                nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=(stride, 1)),
                 nn.BatchNorm2d(out_channels),
             )
 
@@ -210,6 +257,7 @@ class st_gcn_block(nn.Module):
         x = self.tcn(x) + res
 
         return self.relu(x), A
+
 
 class SCN(nn.Module):
     r"""The basic module for applying a graph convolution.
@@ -236,27 +284,32 @@ class SCN(nn.Module):
             :math:`T_{in}/T_{out}` is a length of input/output sequence,
             :math:`V` is the number of graph nodes.
     """
-    def __init__(self,
-                 in_channels,
-                 out_channels,
-                 kernel_size,
-                 t_kernel_size=1,
-                 t_stride=1,
-                 t_padding=0,
-                 t_dilation=1,
-                 bias=True):
+
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        kernel_size,
+        t_kernel_size=1,
+        t_stride=1,
+        t_padding=0,
+        t_dilation=1,
+        bias=True,
+    ):
         super().__init__()
         # The defined module SCN are responsible only for the Spacial Graph (i.e. the graph in on frame),
         # and the parameter t_kernel_size in this situation is always set to 1.
 
         self.kernel_size = kernel_size
-        self.conv = nn.Conv2d(in_channels,
-                              out_channels * kernel_size,
-                              kernel_size=(t_kernel_size, 1),
-                              padding=(t_padding, 0),
-                              stride=(t_stride, 1),
-                              dilation=(t_dilation, 1),
-                              bias=bias)
+        self.conv = nn.Conv2d(
+            in_channels,
+            out_channels * kernel_size,
+            kernel_size=(t_kernel_size, 1),
+            padding=(t_padding, 0),
+            stride=(t_stride, 1),
+            dilation=(t_dilation, 1),
+            bias=bias,
+        )
         """
         The 1x1 conv operation here stands for the weight metrix W.
         The kernel_size here stands for the number of different adjacency matrix, 
@@ -265,7 +318,6 @@ class SCN(nn.Module):
         It is reasonable to apply 1x1 conv as the implementation of weight function.
         """
 
-
     def forward(self, x, A):
         assert A.size(0) == self.kernel_size
 
@@ -273,12 +325,13 @@ class SCN(nn.Module):
 
         n, kc, t, v = x.size()
         x = x.view(n, self.kernel_size, kc // self.kernel_size, t, v)
-        x = torch.einsum('nkctv,kvw->nctw', (x, A))
+        x = torch.einsum("nkctv,kvw->nctw", (x, A))
 
         return x.contiguous(), A
 
-class SpatialGraph():
-    """ Use skeleton sequences extracted by Openpose/HRNet to construct Spatial-Temporal Graph
+
+class SpatialGraph:
+    """Use skeleton sequences extracted by Openpose/HRNet to construct Spatial-Temporal Graph
 
     Args:
         strategy (string): must be one of the follow candidates
@@ -295,12 +348,15 @@ class SpatialGraph():
         max_hop (int): the maximal distance between two connected nodes # 1-neighbor
         dilation (int): controls the spacing between the kernel points
     """
-    def __init__(self,
-                 layout='body_12', # Openpose here represents for body_12
-                 strategy='spatial',
-                 semantic_level=0,
-                 max_hop=1,
-                 dilation=1):
+
+    def __init__(
+        self,
+        layout="body_12",  # Openpose here represents for body_12
+        strategy="spatial",
+        semantic_level=0,
+        max_hop=1,
+        dilation=1,
+    ):
         self.layout = layout
         self.strategy = strategy
         self.max_hop = max_hop
@@ -312,24 +368,35 @@ class SpatialGraph():
         return self.A
 
     def get_A_num(self, strategy):
-        if self.strategy == 'uniform':
+        if self.strategy == "uniform":
             return 1
-        elif self.strategy == 'distance':
+        elif self.strategy == "distance":
             return 2
-        elif (self.strategy == 'spatial') or (self.strategy == 'gait_temporal'):
+        elif (self.strategy == "spatial") or (self.strategy == "gait_temporal"):
             return 3
         else:
             raise ValueError("Do Not Exist This Strategy")
 
     def get_layout_info(self, layout):
-        if layout == 'body_12':
+        if layout == "body_12":
             num_node = 12
             neighbor_link_dic = {
-                0: [(7, 1), (1, 0), (10, 4), (4, 6),
-                     (8, 2), (2, 3), (11, 5), (5, 9),
-                     (9, 3), (3, 0), (9, 6), (6, 0)],
+                0: [
+                    (7, 1),
+                    (1, 0),
+                    (10, 4),
+                    (4, 6),
+                    (8, 2),
+                    (2, 3),
+                    (11, 5),
+                    (5, 9),
+                    (9, 3),
+                    (3, 0),
+                    (9, 6),
+                    (6, 0),
+                ],
                 1: [(1, 0), (4, 0), (0, 3), (2, 3), (5, 3)],
-                2: [(1, 0), (2, 0)]
+                2: [(1, 0), (2, 0)],
             }
             return num_node, neighbor_link_dic
         else:
@@ -337,11 +404,11 @@ class SpatialGraph():
 
     def get_edge(self, semantic_level):
         # edge is a list of [child, parent] pairs, regarding the center node as root node
-        self_link = [(i, i) for i in range(int(self.num_node / (2 ** semantic_level)))]
+        self_link = [(i, i) for i in range(int(self.num_node / (2**semantic_level)))]
         neighbor_link = self.neighbor_link_dic[semantic_level]
         edge = self_link + neighbor_link
         center = []
-        if self.layout == 'body_12':
+        if self.layout == "body_12":
             if semantic_level == 0:
                 center = [0, 3, 6, 9]
             elif semantic_level == 1:
@@ -352,24 +419,24 @@ class SpatialGraph():
 
     def get_gait_temporal_partitioning(self, semantic_level):
         if semantic_level == 0:
-            if self.layout == 'body_12':
+            if self.layout == "body_12":
                 positive_node = {1, 2, 4, 5, 7, 8, 10, 11}
                 negative_node = {0, 3, 6, 9}
         elif semantic_level == 1:
-            if self.layout == 'body_12':
+            if self.layout == "body_12":
                 positive_node = {1, 2, 4, 5}
                 negative_node = {0, 3}
         elif semantic_level == 2:
-            if self.layout == 'body_12':
+            if self.layout == "body_12":
                 positive_node = {1, 2}
                 negative_node = {0}
         return positive_node, negative_node
-            
+
     def get_adjacency(self, semantic_level):
         edge, center = self.get_edge(semantic_level)
-        num_node = int(self.num_node / (2 ** semantic_level))
+        num_node = int(self.num_node / (2**semantic_level))
         hop_dis = get_hop_distance(num_node, edge, max_hop=self.max_hop)
-                
+
         valid_hop = range(0, self.max_hop + 1, self.dilation)
         adjacency = np.zeros((num_node, num_node))
         for hop in valid_hop:
@@ -383,16 +450,16 @@ class SpatialGraph():
         # when x ≠ 0, the normalized adjacency from node b to node a is x.
         # the value of x is normalized by the number of adjacent neighbor nodes around the node b.
 
-        if self.strategy == 'uniform':
+        if self.strategy == "uniform":
             A = np.zeros((1, num_node, num_node))
             A[0] = normalize_adjacency
             return A
-        elif self.strategy == 'distance':
+        elif self.strategy == "distance":
             A = np.zeros((len(valid_hop), num_node, num_node))
             for i, hop in enumerate(valid_hop):
                 A[i][hop_dis == hop] = normalize_adjacency[hop_dis == hop]
             return A
-        elif self.strategy == 'spatial':
+        elif self.strategy == "spatial":
             A = []
             for hop in valid_hop:
                 a_root = np.zeros((num_node, num_node))
@@ -417,9 +484,11 @@ class SpatialGraph():
             A = np.stack(A)
             self.A = A
             return A
-        elif self.strategy == 'gait_temporal':
+        elif self.strategy == "gait_temporal":
             A = []
-            positive_node, negative_node = self.get_gait_temporal_partitioning(semantic_level)
+            positive_node, negative_node = self.get_gait_temporal_partitioning(
+                semantic_level
+            )
             for hop in valid_hop:
                 a_root = np.zeros((num_node, num_node))
                 a_positive = np.zeros((num_node, num_node))
@@ -433,7 +502,7 @@ class SpatialGraph():
                                 a_positive[j, i] = normalize_adjacency[j, i]
                             else:
                                 a_negative[j, i] = normalize_adjacency[j, i]
-                
+
                 if hop == 0:
                     A.append(a_root)
                 else:
@@ -448,7 +517,7 @@ class SpatialGraph():
 def get_hop_distance(num_node, edge, max_hop=1):
     # Calculate the shortest path between nodes
     # i.e. The minimum number of steps needed to walk from one node to another
-    A = np.zeros((num_node, num_node)) # Ajacent Matrix
+    A = np.zeros((num_node, num_node))  # Ajacent Matrix
     for i, j in edge:
         A[j, i] = 1
         A[i, j] = 1
@@ -456,7 +525,7 @@ def get_hop_distance(num_node, edge, max_hop=1):
     # compute hop steps
     hop_dis = np.zeros((num_node, num_node)) + np.inf
     transfer_mat = [np.linalg.matrix_power(A, d) for d in range(max_hop + 1)]
-    arrive_mat = (np.stack(transfer_mat) > 0)
+    arrive_mat = np.stack(transfer_mat) > 0
     for d in range(max_hop, -1, -1):
         hop_dis[arrive_mat[d]] = d
     return hop_dis
@@ -468,7 +537,7 @@ def normalize_digraph(A):
     Dn = np.zeros((num_node, num_node))
     for i in range(num_node):
         if Dl[i] > 0:
-            Dn[i, i] = Dl[i]**(-1)
+            Dn[i, i] = Dl[i] ** (-1)
     AD = np.dot(A, Dn)
     return AD
 
@@ -479,6 +548,6 @@ def normalize_undigraph(A):
     Dn = np.zeros((num_node, num_node))
     for i in range(num_node):
         if Dl[i] > 0:
-            Dn[i, i] = Dl[i]**(-0.5)
+            Dn[i, i] = Dl[i] ** (-0.5)
     DAD = np.dot(np.dot(Dn, A), Dn)
     return DAD

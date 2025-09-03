@@ -4,15 +4,16 @@ import numpy as np
 import torch.nn.functional as F
 import os
 
+
 #####################################################################################################################
 def build_act_layer(act_type):
     """Build activation layer."""
     if act_type is None:
         return nn.Identity()
-    assert act_type in ['GELU', 'LeakyReLU', 'SiLU']
-    if act_type == 'SiLU':
+    assert act_type in ["GELU", "LeakyReLU", "SiLU"]
+    if act_type == "SiLU":
         return nn.SiLU()
-    elif act_type == 'LeakyReLU':
+    elif act_type == "LeakyReLU":
         return nn.LeakyReLU(inplace=True)
     else:
         return nn.GELU()
@@ -21,22 +22,23 @@ def build_act_layer(act_type):
 class ElementScale(nn.Module):
     """A learnable element-wise scaler."""
 
-    def __init__(self, embed_dims, init_value=0., requires_grad=True):
+    def __init__(self, embed_dims, init_value=0.0, requires_grad=True):
         super(ElementScale, self).__init__()
         self.scale = nn.Parameter(
-            init_value * torch.ones((1, embed_dims//2, 1, 1, 1)),
-            requires_grad=requires_grad
+            init_value * torch.ones((1, embed_dims // 2, 1, 1, 1)),
+            requires_grad=requires_grad,
         )
 
     def forward(self, x):
         return x * self.scale
 
+
 class ElementScale_G(nn.Module):
-    def __init__(self, embed_dims, init_value=0., requires_grad=True):
+    def __init__(self, embed_dims, init_value=0.0, requires_grad=True):
         super(ElementScale_G, self).__init__()
         self.scale = nn.Parameter(
             init_value * torch.ones((1, embed_dims, 1, 1, 1)),
-            requires_grad=requires_grad
+            requires_grad=requires_grad,
         )
 
     def forward(self, x):
@@ -57,7 +59,13 @@ class Local_SKTA_FD(nn.Module):
         d_k0 = 2 * dilation - 1
         d_p0 = (d_k0 - 1) // 2
 
-        self.DWConv = nn.Conv3d(in_channels, in_channels, (d_k0, 1, 1), padding=(d_p0, 0, 0), groups=in_channels)
+        self.DWConv = nn.Conv3d(
+            in_channels,
+            in_channels,
+            (d_k0, 1, 1),
+            padding=(d_p0, 0, 0),
+            groups=in_channels,
+        )
         self.PWConv = nn.Conv3d(in_channels, in_channels, 1)
 
     def forward(self, x):
@@ -65,6 +73,7 @@ class Local_SKTA_FD(nn.Module):
         attn = self.PWConv(attn)
 
         return attn
+
 
 class Local_SKSA_FD(nn.Module):
     def __init__(self, in_channels, kernel_size=13, dilation=3):
@@ -77,7 +86,13 @@ class Local_SKSA_FD(nn.Module):
         d_k0 = 2 * dilation - 1
         d_p0 = (d_k0 - 1) // 2
 
-        self.DWConv = nn.Conv3d(in_channels, in_channels, (1, d_k0, d_k0), padding=(0, d_p0, d_p0), groups=in_channels)
+        self.DWConv = nn.Conv3d(
+            in_channels,
+            in_channels,
+            (1, d_k0, d_k0),
+            padding=(0, d_p0, d_p0),
+            groups=in_channels,
+        )
         self.PWConv = nn.Conv3d(in_channels, in_channels, 1)
 
     def forward(self, x):
@@ -85,6 +100,8 @@ class Local_SKSA_FD(nn.Module):
         attn = self.PWConv(attn)
 
         return attn
+
+
 #######################################################################################################################
 class Dynamic_TF(nn.Module):
     def __init__(self, in_channels, kernel_size=13):
@@ -93,13 +110,20 @@ class Dynamic_TF(nn.Module):
         self.in_channels = in_channels
         self.kernel_size = kernel_size
 
-        self.TF = nn.Sequential(nn.Conv3d(in_channels, in_channels, (3, 1, 1), padding=(1, 0, 0), groups=in_channels),
-                                nn.Conv3d(in_channels, in_channels, 1)
-                                )
+        self.TF = nn.Sequential(
+            nn.Conv3d(
+                in_channels,
+                in_channels,
+                (3, 1, 1),
+                padding=(1, 0, 0),
+                groups=in_channels,
+            ),
+            nn.Conv3d(in_channels, in_channels, 1),
+        )
 
     def forward(self, x):
 
-        x_m = x.mean(dim = 2, keepdim = True)
+        x_m = x.mean(dim=2, keepdim=True)
         x_mt = x - x_m
 
         x_t = self.TF(x)
@@ -109,6 +133,7 @@ class Dynamic_TF(nn.Module):
 
         return x_f
 
+
 class Dynamic_SF(nn.Module):
     def __init__(self, in_channels, kernel_size=13):
         super(Dynamic_SF, self).__init__()
@@ -116,9 +141,16 @@ class Dynamic_SF(nn.Module):
         self.in_channels = in_channels
         self.kernel_size = kernel_size
 
-        self.SF = nn.Sequential(nn.Conv3d(in_channels, in_channels, (1, 3, 3), padding=(0, 1, 1), groups=in_channels),
-                                nn.Conv3d(in_channels, in_channels, 1)
-                                )
+        self.SF = nn.Sequential(
+            nn.Conv3d(
+                in_channels,
+                in_channels,
+                (1, 3, 3),
+                padding=(0, 1, 1),
+                groups=in_channels,
+            ),
+            nn.Conv3d(in_channels, in_channels, 1),
+        )
 
     def forward(self, x):
         x_m = x.mean(dim=2, keepdim=True)
@@ -131,11 +163,13 @@ class Dynamic_SF(nn.Module):
 
         return x_f
 
+
 #######################################################################################################################
 
+
 class Attention(nn.Module):
-    def __init__(self,in_channels):
-        super(Attention,self).__init__()
+    def __init__(self, in_channels):
+        super(Attention, self).__init__()
 
         self.fc1 = nn.Conv3d(in_channels, in_channels // 2, kernel_size=1)
         self.fc2 = nn.Conv3d(in_channels // 2, in_channels, kernel_size=1)
@@ -148,18 +182,24 @@ class Attention(nn.Module):
 
         return attention_weights
 
+
 class TAFL(nn.Module):
-    def __init__(self, in_channels, attn_act_type = 'LeakyReLU', attn_force_fp32=False, attn_aggregation=True):
+    def __init__(
+        self,
+        in_channels,
+        attn_act_type="LeakyReLU",
+        attn_force_fp32=False,
+        attn_aggregation=True,
+    ):
         super(TAFL, self).__init__()
 
         self.gate = nn.Conv3d(in_channels, in_channels, kernel_size=1)
         self.act_value = build_act_layer(attn_act_type)
         self.value = Local_SKTA_FD(in_channels)
-        self.conv1 = nn.Conv3d(in_channels,in_channels,kernel_size=1)
-        self.proj_2 = nn.Conv3d(in_channels,in_channels,kernel_size=1)
+        self.conv1 = nn.Conv3d(in_channels, in_channels, kernel_size=1)
+        self.proj_2 = nn.Conv3d(in_channels, in_channels, kernel_size=1)
         self.attn_force_fp32 = attn_force_fp32
-        self.sigma = ElementScale_G(
-            in_channels, init_value=1e-5, requires_grad=True)
+        self.sigma = ElementScale_G(in_channels, init_value=1e-5, requires_grad=True)
         self.act_gate = build_act_layer(attn_act_type)
         self.attn_aggregation = attn_aggregation
         self.attention = Attention(in_channels)
@@ -188,13 +228,13 @@ class TAFL(nn.Module):
     #         v = v.to(torch.float32)
     #         return self.proj_2(self.act_gate(g) * self.act_gate(v))
 
-    def forward(self,x):
+    def forward(self, x):
         shortcut = x.clone()
 
-        b,c,t,h,w = x.size()
+        b, c, t, h, w = x.size()
 
         h = x.size(3)
-        split_size = int(h // 2 ** 1)
+        split_size = int(h // 2**1)
         lcl_feat = x.split(split_size, 3)
 
         x = self.feature_decompose_C(x)
@@ -215,18 +255,24 @@ class TAFL(nn.Module):
 
         return x
 
+
 class SAFL(nn.Module):
-    def __init__(self, in_channels, attn_act_type = 'LeakyReLU', attn_force_fp32=False, attn_aggregation=True):
+    def __init__(
+        self,
+        in_channels,
+        attn_act_type="LeakyReLU",
+        attn_force_fp32=False,
+        attn_aggregation=True,
+    ):
         super(SAFL, self).__init__()
 
         self.gate = nn.Conv3d(in_channels, in_channels, kernel_size=1)
         self.act_value = build_act_layer(attn_act_type)
         self.value = Local_SKSA_FD(in_channels)
-        self.conv1 = nn.Conv3d(in_channels,in_channels,kernel_size=1)
-        self.proj_2 = nn.Conv3d(in_channels,in_channels,kernel_size=1)
+        self.conv1 = nn.Conv3d(in_channels, in_channels, kernel_size=1)
+        self.proj_2 = nn.Conv3d(in_channels, in_channels, kernel_size=1)
         self.attn_force_fp32 = attn_force_fp32
-        self.sigma = ElementScale(
-            in_channels, init_value=1e-5, requires_grad=True)
+        self.sigma = ElementScale(in_channels, init_value=1e-5, requires_grad=True)
         self.act_gate = build_act_layer(attn_act_type)
         self.attn_aggregation = attn_aggregation
         self.attention = Attention(in_channels)
@@ -240,13 +286,13 @@ class SAFL(nn.Module):
         x = self.act_value(x)
         return x
 
-    def forward(self,x):
+    def forward(self, x):
         shortcut = x.clone()
 
-        b,c,t,h,w = x.size()
+        b, c, t, h, w = x.size()
 
         h = x.size(3)
-        split_size = int(h // 2 ** 1)
+        split_size = int(h // 2**1)
         lcl_feat = x.split(split_size, 3)
 
         x = self.feature_decompose_C(x)
@@ -266,95 +312,31 @@ class SAFL(nn.Module):
         x = x + shortcut
 
         return x
+
+
 ####################################################################################################################
 class GTAFL(nn.Module):
-    def __init__(self, in_channels, num_groups = 2, attn_act_type = 'LeakyReLU', attn_force_fp32=False, attn_aggregation=True):
+    def __init__(
+        self,
+        in_channels,
+        num_groups=2,
+        attn_act_type="LeakyReLU",
+        attn_force_fp32=False,
+        attn_aggregation=True,
+    ):
         super(GTAFL, self).__init__()
-
-        self.num_groups = num_groups
-        assert in_channels % num_groups == 0
-
-        self.gate = nn.Conv3d(in_channels//2, in_channels//2, kernel_size=1)
-        self.act_value = build_act_layer(attn_act_type)
-        self.value1 = Local_SKTA_FD(in_channels // 2)
-        self.value2 = Local_SKSA_FD(in_channels // 2)
-        self.conv1 = nn.Conv3d(in_channels//2,in_channels//2,kernel_size=1)
-        self.proj_2 = nn.Conv3d(in_channels//2,in_channels//2,kernel_size=1)
-        self.attn_force_fp32 = attn_force_fp32
-        self.sigma = ElementScale(
-            in_channels, init_value=1e-5, requires_grad=True)
-        self.act_gate = build_act_layer(attn_act_type)
-        self.attn_aggregation = attn_aggregation
-        self.attention = Attention(in_channels//2)
-
-    def feature_decompose_C(self, x):
-
-        x = self.conv1(x)
-        x_c = F.adaptive_avg_pool3d(x, output_size=1)
-        x = x + self.sigma(x - x_c)
-        x = self.act_value(x)
-        return x
-
-    def forward(self,x):
-        shortcut = x.clone()
-
-        groups = torch.chunk(x, self.num_groups, dim=1)
-
-        x1 = groups[0]
-        x2 = groups[1]
-
-        h1 = x1.size(3)
-        split_size = int(h1 // 2 ** 1)
-        lcl_feat_g1 = x1.split(split_size, 3)
-
-        x1 = self.feature_decompose_C(x1)
-        g1 = self.gate(x1)
-        v1 = torch.cat([self.value1(_) for _ in lcl_feat_g1], 3)
-
-        h2 = x2.size(3)
-        split_size = int(h2 // 2 ** 1)
-        lcl_feat_g2 = x2.split(split_size, 3)
-
-        x2 = self.feature_decompose_C(x2)
-        g2 = self.gate(x2)
-        v2 = torch.cat([self.value2(_) for _ in lcl_feat_g2], 3)
-        # v = self.value(x)
-
-        if self.attn_aggregation:
-            w_g1 = self.attention(g1) * g1
-            w_v1 = self.attention(v1) * v1
-            x1 = self.proj_2(self.act_gate(w_g1) * self.act_gate(w_v1))
-
-            w_g2 = self.attention(g2) * g2
-            w_v2 = self.attention(v2) * v2
-            x2 = self.proj_2(self.act_gate(w_g2) * self.act_gate(w_v2))
-            xc = torch.cat((x1, x2), dim = 1)
-
-        else:
-            x1 = self.proj_2(self.act_gate(g1) * self.act_gate(v1))
-            x2 = self.proj_2(self.act_gate(g2) * self.act_gate(v2))
-            xc = torch.cat((x1, x2), dim=1)
-
-        x = xc + shortcut
-
-        return x
-
-class GDTAFL(nn.Module):
-    def __init__(self, in_channels, num_groups=2, attn_act_type='LeakyReLU', attn_force_fp32=False, attn_aggregation=True):
-        super(GDTAFL, self).__init__()
 
         self.num_groups = num_groups
         assert in_channels % num_groups == 0
 
         self.gate = nn.Conv3d(in_channels // 2, in_channels // 2, kernel_size=1)
         self.act_value = build_act_layer(attn_act_type)
-        self.value1 = Dynamic_TF(in_channels // 2)
-        self.value2 = Dynamic_SF(in_channels // 2)
+        self.value1 = Local_SKTA_FD(in_channels // 2)
+        self.value2 = Local_SKSA_FD(in_channels // 2)
         self.conv1 = nn.Conv3d(in_channels // 2, in_channels // 2, kernel_size=1)
         self.proj_2 = nn.Conv3d(in_channels // 2, in_channels // 2, kernel_size=1)
         self.attn_force_fp32 = attn_force_fp32
-        self.sigma = ElementScale(
-            in_channels, init_value=1e-5, requires_grad=True)
+        self.sigma = ElementScale(in_channels, init_value=1e-5, requires_grad=True)
         self.act_gate = build_act_layer(attn_act_type)
         self.attn_aggregation = attn_aggregation
         self.attention = Attention(in_channels // 2)
@@ -376,7 +358,7 @@ class GDTAFL(nn.Module):
         x2 = groups[1]
 
         h1 = x1.size(3)
-        split_size = int(h1 // 2 ** 1)
+        split_size = int(h1 // 2**1)
         lcl_feat_g1 = x1.split(split_size, 3)
 
         x1 = self.feature_decompose_C(x1)
@@ -384,7 +366,7 @@ class GDTAFL(nn.Module):
         v1 = torch.cat([self.value1(_) for _ in lcl_feat_g1], 3)
 
         h2 = x2.size(3)
-        split_size = int(h2 // 2 ** 1)
+        split_size = int(h2 // 2**1)
         lcl_feat_g2 = x2.split(split_size, 3)
 
         x2 = self.feature_decompose_C(x2)
@@ -411,38 +393,138 @@ class GDTAFL(nn.Module):
 
         return x
 
+
+class GDTAFL(nn.Module):
+    def __init__(
+        self,
+        in_channels,
+        num_groups=2,
+        attn_act_type="LeakyReLU",
+        attn_force_fp32=False,
+        attn_aggregation=True,
+    ):
+        super(GDTAFL, self).__init__()
+
+        self.num_groups = num_groups
+        assert in_channels % num_groups == 0
+
+        self.gate = nn.Conv3d(in_channels // 2, in_channels // 2, kernel_size=1)
+        self.act_value = build_act_layer(attn_act_type)
+        self.value1 = Dynamic_TF(in_channels // 2)
+        self.value2 = Dynamic_SF(in_channels // 2)
+        self.conv1 = nn.Conv3d(in_channels // 2, in_channels // 2, kernel_size=1)
+        self.proj_2 = nn.Conv3d(in_channels // 2, in_channels // 2, kernel_size=1)
+        self.attn_force_fp32 = attn_force_fp32
+        self.sigma = ElementScale(in_channels, init_value=1e-5, requires_grad=True)
+        self.act_gate = build_act_layer(attn_act_type)
+        self.attn_aggregation = attn_aggregation
+        self.attention = Attention(in_channels // 2)
+
+    def feature_decompose_C(self, x):
+
+        x = self.conv1(x)
+        x_c = F.adaptive_avg_pool3d(x, output_size=1)
+        x = x + self.sigma(x - x_c)
+        x = self.act_value(x)
+        return x
+
+    def forward(self, x):
+        shortcut = x.clone()
+
+        groups = torch.chunk(x, self.num_groups, dim=1)
+
+        x1 = groups[0]
+        x2 = groups[1]
+
+        h1 = x1.size(3)
+        split_size = int(h1 // 2**1)
+        lcl_feat_g1 = x1.split(split_size, 3)
+
+        x1 = self.feature_decompose_C(x1)
+        g1 = self.gate(x1)
+        v1 = torch.cat([self.value1(_) for _ in lcl_feat_g1], 3)
+
+        h2 = x2.size(3)
+        split_size = int(h2 // 2**1)
+        lcl_feat_g2 = x2.split(split_size, 3)
+
+        x2 = self.feature_decompose_C(x2)
+        g2 = self.gate(x2)
+        v2 = torch.cat([self.value2(_) for _ in lcl_feat_g2], 3)
+        # v = self.value(x)
+
+        if self.attn_aggregation:
+            w_g1 = self.attention(g1) * g1
+            w_v1 = self.attention(v1) * v1
+            x1 = self.proj_2(self.act_gate(w_g1) * self.act_gate(w_v1))
+
+            w_g2 = self.attention(g2) * g2
+            w_v2 = self.attention(v2) * v2
+            x2 = self.proj_2(self.act_gate(w_g2) * self.act_gate(w_v2))
+            xc = torch.cat((x1, x2), dim=1)
+
+        else:
+            x1 = self.proj_2(self.act_gate(g1) * self.act_gate(v1))
+            x2 = self.proj_2(self.act_gate(g2) * self.act_gate(v2))
+            xc = torch.cat((x1, x2), dim=1)
+
+        x = xc + shortcut
+
+        return x
+
+
 #############################################################################################################
 class SCGait_SCGTST_AA(nn.Module):
-    def __init__(self,in_channels, num_groups=2, attn_agg = True):
-        super(SCGait_SCGTST_AA,self).__init__()
+    def __init__(self, in_channels, num_groups=2, attn_agg=True):
+        super(SCGait_SCGTST_AA, self).__init__()
 
         self.num_groups = num_groups
         assert in_channels % num_groups == 0
         self.attn_agg = attn_agg
 
-        self.conv = nn.Conv3d(in_channels,in_channels,kernel_size=3,padding=1)
+        self.conv = nn.Conv3d(in_channels, in_channels, kernel_size=3, padding=1)
         self.bn = nn.BatchNorm3d(in_channels)
         self.relu = nn.LeakyReLU(inplace=True)
 
-        self.TG = nn.Sequential(nn.Conv3d(in_channels//2, in_channels//2, kernel_size = (3,1,1), stride=1, padding=(1,0,0), dilation=1, groups=in_channels//2, bias=False),
-                                nn.BatchNorm3d(in_channels // 2),
-                                nn.LeakyReLU(inplace=True),
-                                nn.Conv3d(in_channels//2,in_channels//2,kernel_size=1),
-                                nn.BatchNorm3d(in_channels//2),
-                                nn.LeakyReLU(inplace=True))
+        self.TG = nn.Sequential(
+            nn.Conv3d(
+                in_channels // 2,
+                in_channels // 2,
+                kernel_size=(3, 1, 1),
+                stride=1,
+                padding=(1, 0, 0),
+                dilation=1,
+                groups=in_channels // 2,
+                bias=False,
+            ),
+            nn.BatchNorm3d(in_channels // 2),
+            nn.LeakyReLU(inplace=True),
+            nn.Conv3d(in_channels // 2, in_channels // 2, kernel_size=1),
+            nn.BatchNorm3d(in_channels // 2),
+            nn.LeakyReLU(inplace=True),
+        )
 
-
-        self.SG = nn.Sequential(nn.Conv3d(in_channels // 2, in_channels // 2, kernel_size=(1, 3, 3), stride=1, padding=(0, 1, 1), dilation=1, groups=in_channels // 2, bias=False),
-                                 nn.BatchNorm3d(in_channels // 2),
-                                 nn.LeakyReLU(inplace=True),
-                                 nn.Conv3d(in_channels // 2, in_channels // 2, kernel_size=1),
-                                 nn.BatchNorm3d(in_channels // 2),
-                                 nn.LeakyReLU(inplace=True))
-
+        self.SG = nn.Sequential(
+            nn.Conv3d(
+                in_channels // 2,
+                in_channels // 2,
+                kernel_size=(1, 3, 3),
+                stride=1,
+                padding=(0, 1, 1),
+                dilation=1,
+                groups=in_channels // 2,
+                bias=False,
+            ),
+            nn.BatchNorm3d(in_channels // 2),
+            nn.LeakyReLU(inplace=True),
+            nn.Conv3d(in_channels // 2, in_channels // 2, kernel_size=1),
+            nn.BatchNorm3d(in_channels // 2),
+            nn.LeakyReLU(inplace=True),
+        )
 
         self.Cross_Att = Spatio_Temporal_Cross_Attention(in_channels, in_channels)
 
-    def forward(self,x):
+    def forward(self, x):
 
         x = self.conv(x)
         x = self.bn(x)
@@ -457,11 +539,12 @@ class SCGait_SCGTST_AA(nn.Module):
         w_st = torch.sigmoid(torch.add(groups[1], self.SG(groups[1])))
         f_st = w_st * self.SG(groups[1])
 
-        f_tst = self.Cross_Att(f_t,f_st)
+        f_tst = self.Cross_Att(f_t, f_st)
 
-        f_stt = torch.cat((f_tst,f_st),dim=1)
+        f_stt = torch.cat((f_tst, f_st), dim=1)
 
         return f_stt
+
 
 #####################################################################################################################
 class Spatio_Temporal_Cross_Attention(nn.Module):
@@ -495,10 +578,17 @@ class Spatio_Temporal_Cross_Attention(nn.Module):
 
         attention1 = torch.bmm(query_fea1, key_fea1)
         attention1 = self.s(attention1)
-        out1 = torch.bmm(Val_fea1, attention1).transpose(-1, -2).unsqueeze(-1).unsqueeze(-1)
+        out1 = (
+            torch.bmm(Val_fea1, attention1)
+            .transpose(-1, -2)
+            .unsqueeze(-1)
+            .unsqueeze(-1)
+        )
         out1 = out1.permute(0, 2, 1, 3, 4)
         out1 = self.sigmoid(out1)
         temp_fea_F = temp_fea * out1.expand_as(temp_fea)
 
         return temp_fea_F
+
+
 ########################################################################################################################

@@ -2,7 +2,14 @@ import torch
 import torch.nn as nn
 from ..base_model import BaseModel
 from ..backbones.snn_model import Spiking_vit_MetaFormer
-from ..modules import SetBlockWrapper,HorizontalPoolingPyramid,PackSequenceWrapper,SeparateFCs,SeparateBNNecks,conv3x3
+from ..modules import (
+    SetBlockWrapper,
+    HorizontalPoolingPyramid,
+    PackSequenceWrapper,
+    SeparateFCs,
+    SeparateBNNecks,
+    conv3x3,
+)
 from utils import clones
 from functools import partial
 from einops import rearrange
@@ -39,7 +46,7 @@ class SwinSnnGait(BaseModel):
         self.inference_use_emb2 = (
             model_cfg["use_emb2"] if "use_emb2" in model_cfg else False
         )
-        
+
     def forward(self, inputs):
         functional.reset_net(self.Backbone)
         ipts, labs, _, _, seqL = inputs
@@ -51,13 +58,13 @@ class SwinSnnGait(BaseModel):
         del ipts
 
         out0 = self.layer0(sils)
-        
-        feat = out0     # [n, c, s, h, w]
+
+        feat = out0  # [n, c, s, h, w]
 
         out = self.Backbone(feat.permute(2, 0, 1, 3, 4))  # [s, n, c, h, w]
 
         # Temporal Pooling, TP
-        outs = self.TP(out, seqL,dim=0,options={"dim": 0})[0]  # [n, c, h, w]
+        outs = self.TP(out, seqL, dim=0, options={"dim": 0})[0]  # [n, c, h, w]
 
         # Horizontal Pooling Matching, HPM
         feat = self.HPP(outs)  # [n, c, p]
@@ -69,7 +76,7 @@ class SwinSnnGait(BaseModel):
             embed = embed_2
         else:
             embed = embed_1
-            
+
         retval = {
             "training_feat": {
                 "triplet": {"embeddings": embed_1, "labels": labs},

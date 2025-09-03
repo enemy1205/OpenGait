@@ -14,7 +14,9 @@ from collections import OrderedDict, namedtuple
 
 class NoOp:
     def __getattr__(self, *args):
-        def no_op(*args, **kwargs): pass
+        def no_op(*args, **kwargs):
+            pass
+
         return no_op
 
 
@@ -47,7 +49,7 @@ def get_valid_args(obj, input_args, free_keys=[]):
     elif inspect.isclass(obj):
         expected_keys = inspect.getfullargspec(obj.__init__)[0]
     else:
-        raise ValueError('Just support function and class object!')
+        raise ValueError("Just support function and class object!")
     unexpect_keys = list()
     expected_args = {}
     for k, v in input_args.items():
@@ -58,8 +60,10 @@ def get_valid_args(obj, input_args, free_keys=[]):
         else:
             unexpect_keys.append(k)
     if unexpect_keys != []:
-        logging.info("Find Unexpected Args(%s) in the Configuration of - %s -" %
-                     (', '.join(unexpect_keys), obj.__name__))
+        logging.info(
+            "Find Unexpected Args(%s) in the Configuration of - %s -"
+            % (", ".join(unexpect_keys), obj.__name__)
+        )
     return expected_args
 
 
@@ -67,7 +71,11 @@ def get_attr_from(sources, name):
     try:
         return getattr(sources[0], name)
     except:
-        return get_attr_from(sources[1:], name) if len(sources) > 1 else getattr(sources[0], name)
+        return (
+            get_attr_from(sources[1:], name)
+            if len(sources) > 1
+            else getattr(sources[0], name)
+        )
 
 
 def is_list_or_tuple(x):
@@ -136,9 +144,9 @@ def clones(module, N):
 
 
 def config_loader(path):
-    with open(path, 'r') as stream:
+    with open(path, "r") as stream:
         src_cfgs = yaml.safe_load(stream)
-    with open("./configs/default.yaml", 'r') as stream:
+    with open("./configs/default.yaml", "r") as stream:
         dst_cfgs = yaml.safe_load(stream)
     MergeCfgsDict(src_cfgs, dst_cfgs)
     return dst_cfgs
@@ -159,16 +167,15 @@ def init_seeds(seed=0, cuda_deterministic=True):
 
 
 def handler(signum, frame):
-    logging.info('Ctrl+c/z pressed')
-    os.system(
-        "kill $(ps aux | grep main.py | grep -v grep | awk '{print $2}') ")
-    logging.info('process group flush!')
+    logging.info("Ctrl+c/z pressed")
+    os.system("kill $(ps aux | grep main.py | grep -v grep | awk '{print $2}') ")
+    logging.info("process group flush!")
 
 
 def ddp_all_gather(features, dim=0, requires_grad=True):
-    '''
-        inputs: [n, ...]
-    '''
+    """
+    inputs: [n, ...]
+    """
 
     world_size = torch.distributed.get_world_size()
     rank = torch.distributed.get_rank()
@@ -195,11 +202,16 @@ def get_ddp_module(module, find_unused_parameters=False, **kwargs):
         # for the case that loss module has not parameters.
         return module
     device = torch.cuda.current_device()
-    module = DDPPassthrough(module, device_ids=[device], output_device=device,
-                            find_unused_parameters=find_unused_parameters, **kwargs)
+    module = DDPPassthrough(
+        module,
+        device_ids=[device],
+        output_device=device,
+        find_unused_parameters=find_unused_parameters,
+        **kwargs
+    )
     return module
 
 
 def params_count(net):
     n_parameters = sum(p.numel() for p in net.parameters())
-    return 'Parameters Count: {:.5f}M'.format(n_parameters / 1e6)
+    return "Parameters Count: {:.5f}M".format(n_parameters / 1e6)

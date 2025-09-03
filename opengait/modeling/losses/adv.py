@@ -4,13 +4,14 @@ import torch
 from torch.autograd import Variable
 import torch.autograd as autograd
 
+
 class AdversarialLoss(BaseLoss):
-    def __init__(self, loss_term_weight=1.0,wgan_weight = 0.1):
+    def __init__(self, loss_term_weight=1.0, wgan_weight=0.1):
 
         super(AdversarialLoss, self).__init__(loss_term_weight)
 
         self.criterion = nn.ReLU()
-        
+
         self.wgan_weight = wgan_weight
 
     # def forward(self, logits, labels , wgan_loss):
@@ -38,16 +39,16 @@ class AdversarialLoss(BaseLoss):
     #         'dis_loss':dis_loss.detach().clone()
     #     })
     #     return dis_loss,self.info
-    
+
     def forward(self, logits, labels):
         """
-            logits: fake_img
-            labels: real_img
+        logits: fake_img
+        labels: real_img
         """
         labels = labels.float()
         logits = logits.float()
-        dis_loss = (self.criterion(1 + logits).mean()+self.criterion(1 - labels).mean())/2
-        self.info.update({
-            'dis_loss':dis_loss.detach().clone()
-        })
-        return dis_loss,self.info
+        dis_loss = (
+            self.criterion(1 + logits).mean() + self.criterion(1 - labels).mean()
+        ) / 2
+        self.info.update({"dis_loss": dis_loss.detach().clone()})
+        return dis_loss, self.info
